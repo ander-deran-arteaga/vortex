@@ -52,6 +52,8 @@ export interface FixtureAquaConfig {
   knownStrategyHash: Hex | null;
   baseInventory: bigint;
   quoteInventory: bigint;
+  /** Chain-aware symbol lookup; defaults to the canonical token list. */
+  resolveSymbol?: (address: string) => string;
 }
 
 /** The single strategy the deterministic demo ships with. */
@@ -154,7 +156,7 @@ export function createFixtureAquaQuoteSource(
         const executable = bpsOf(balance, config.makerCoverageBps);
         return {
           address: t.address,
-          symbol: symbolForAddress(t.address),
+          symbol: (config.resolveSymbol ?? symbolForAddress)(t.address),
           virtualBalance: balance.toString(),
           actualBalance: executable.toString(),
           aquaAllowance: executable.toString(),

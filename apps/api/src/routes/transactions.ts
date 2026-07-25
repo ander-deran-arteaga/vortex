@@ -4,8 +4,11 @@ import {
   type UniswapBuildResponse,
 } from "@vortex/shared";
 import type { FastifyInstance } from "fastify";
-import type { Address, Hex } from "viem";
+import { encodeFunctionData, type Address, type Hex } from "viem";
+import { z } from "zod";
 
+import { aquaSwapVmRouterAbi } from "../clients/aquaAbis";
+import { buildTakerTraits } from "../clients/takerTraits";
 import { UniswapApiError } from "../clients/uniswapApiClient";
 import type { AppContext } from "../context";
 import { parseRequest } from "../lib/errors";
@@ -23,10 +26,113 @@ const SESSION_ERROR_MESSAGE: Record<QuoteSessionFailure, string> = {
   ALREADY_USED: "quote session already used; request a new quote",
 };
 
+/**
+ * Request shape for the Aqua builder. Structurally the session half of
+ * `zUniswapBuildRequest`; there is no shared Aqua build schema yet, so this
+ * is deliberately minimal and awaits master canonicalization.
+ */
+const zAquaBuildRequest = z.object({ quoteSessionId: z.string().min(1) });
+
 export function registerTransactionRoutes(
   app: FastifyInstance,
   ctx: AppContext,
 ): void {
+  app.post(API_ROUTES.transactionsAqua, async (req, reply) => {
+    const body = parseRequest(zAquaBuildRequest, req.body);
+
+    // Single-use, exactly as the Uniswap builder: a session that has produced
+    // a transaction cannot produce a second one.
+    const result = ctx.exchange.sessions.consume(body.quoteSessionId);
+    if (!result.ok) {
+      return reply.status(SESSION_ERROR_STATUS[result.reason]).send({
+        error: {
+          code: `SESSION_${result.reason}`,
+          message: SESSION_ERROR_MESSAGE[result.reason],
+        },
+      });
+    }
+
+    const { aqua, request, selectedVenue } = result.session.payload;
+    if (selectedVenue !== "AQUA" || !aqua) {
+      return reply.status(409).send({
+        error: {
+          code: "NOT_AN_AQUA_SESSION",
+          message: "this quote session did not select the Aqua venue",
+        },
+      });
+    }
+
+    const execution = ctx.aquaExecution;
+    if (!execution) {
+      // The fixture has no real order, so there is no transaction to build.
+      // Saying so is honest; fabricating one would be a §21 violation.
+      return reply.status(503).send({
+        error: {
+          code: "AQUA_EXECUTION_UNAVAILABLE",
+          message:
+            "no Aqua strategy is deployed on this chain; quotes are simulated",
+        },
+      });
+    }
+
+    if (
+      aqua.strategyHash.toLowerCase() !==
+      execution.strategy.strategyHash.toLowerCase()
+    ) {
+      return reply.status(409).send({
+        error: {
+          code: "STRATEGY_NOT_EXECUTABLE",
+          message: "the quoted strategy is not the one deployed on this chain",
+        },
+      });
+    }
+
+    // The floor the taker was shown is bound into the calldata: the router
+    // reverts rather than settling below it, so a stale quote cannot silently
+    // fill worse than advertised.
+    const takerTraitsAndData = buildTakerTraits({
+      taker: request.taker,
+      isExactIn: true,
+      threshold: aqua.minimumAmountOut,
+    });
+
+    const data = encodeFunctionData({
+      abi: aquaSwapVmRouterAbi,
+      functionName: "swap",
+      args: [
+        execution.strategy.order,
+        request.tokenIn,
+        request.tokenOut,
+        request.amountIn,
+        takerTraitsAndData,
+      ],
+    });
+
+    ctx.executions.recordExecution({
+      kind: "BEST_EXECUTION_AQUA",
+      chainId: request.chainId,
+      strategyHash: aqua.strategyHash,
+      maker: execution.strategy.maker,
+      taker: request.taker,
+      tokenIn: request.tokenIn,
+      tokenOut: request.tokenOut,
+      amountIn: request.amountIn.toString(),
+      // Nothing has settled yet; the taker still has to sign and broadcast.
+      amountOut: null,
+    });
+
+    return {
+      to: execution.routerAddress,
+      data,
+      value: "0",
+      gasLimit: null,
+      // Surfaced so the UI can show the bound the calldata actually enforces.
+      minimumAmountOut: aqua.minimumAmountOut.toString(),
+      strategyHash: aqua.strategyHash,
+      // The taker must approve the router for tokenIn before broadcasting.
+      spender: execution.routerAddress,
+    };
+  });
   app.post(API_ROUTES.transactionsUniswap, async (req, reply) => {
     const body = parseRequest(zUniswapBuildRequest, req.body);
 

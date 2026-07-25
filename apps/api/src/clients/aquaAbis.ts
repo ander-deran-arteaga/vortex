@@ -89,6 +89,26 @@ export const vortexErrorsAbi = [
     ],
   },
   { type: "error", name: "VortexZeroAmountOut", inputs: [] },
+  // swap-vm TakerTraitsLib — a malformed or unsatisfiable taker blob reverts
+  // here, not in Vortex code, so decode it too or the reason is just "reverted".
+  { type: "error", name: "TakerTraitsMissingTraits", inputs: [] },
+  {
+    type: "error",
+    name: "TakerTraitsInsufficientMinOutputAmount",
+    inputs: [
+      { name: "amountOut", type: "uint256" },
+      { name: "amountOutMin", type: "uint256" },
+    ],
+  },
+  {
+    type: "error",
+    name: "TakerTraitsExceedingMaxInputAmount",
+    inputs: [
+      { name: "amountIn", type: "uint256" },
+      { name: "amountInMax", type: "uint256" },
+    ],
+  },
+  { type: "error", name: "TakerTraitsDeadlineExpired", inputs: [] },
   {
     type: "error",
     name: "VortexRebateExpired",

@@ -1,4 +1,4 @@
-import { API_ROUTES, TOKENS, type ConfigResponse } from "@vortex/shared";
+import { API_ROUTES, type ConfigResponse } from "@vortex/shared";
 import type { FastifyInstance } from "fastify";
 
 import type { AppContext } from "../context";
@@ -9,7 +9,7 @@ export function registerConfigRoutes(
 ): void {
   app.get(API_ROUTES.config, async (): Promise<ConfigResponse> => ({
     chainId: ctx.env.CHAIN_ID,
-    tokens: TOKENS.map((t) => ({
+    tokens: ctx.tokens.map((t) => ({
       address: t.address,
       symbol: t.symbol,
       decimals: t.decimals,

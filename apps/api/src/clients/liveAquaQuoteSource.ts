@@ -3,6 +3,7 @@ import { decodeErrorResult, type Address, type Hex, type PublicClient } from "vi
 
 import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
 
+import { buildTakerTraits } from "./takerTraits";
 import { symbolForAddress } from "./tokenSymbols";
 
 import type {
@@ -63,6 +64,8 @@ export interface LiveAquaQuoteSourceConfig {
   /** Taker traits blob forwarded to `router.quote`; empty means "no rebate". */
   takerTraitsAndData?: Hex;
   gasUnits?: bigint;
+  /** Chain-aware symbol lookup; defaults to the canonical token list. */
+  resolveSymbol?: (address: string) => string;
 }
 
 interface QuoteScaffold {
@@ -150,7 +153,17 @@ export function createLiveAquaQuoteSource(
 ): AquaQuoteSource {
   const minimumCoverageBps = config.minimumCoverageBps ?? FULL_COVERAGE_BPS;
   const rebateBps = config.rebateBps ?? 0;
-  const takerTraitsAndData = config.takerTraitsAndData ?? "0x";
+  // An empty blob is NOT a valid "no options" value: TakerTraitsLib.parse
+  // reads a fixed 22-byte header and reverts with TakerTraitsMissingTraits on
+  // anything shorter. Quoting needs a minimal well-formed header, unbounded
+  // because a view call enforces no threshold.
+  const takerTraitsAndData =
+    config.takerTraitsAndData ??
+    buildTakerTraits({
+      taker: "0x0000000000000000000000000000000000000000",
+      isExactIn: true,
+      threshold: null,
+    });
   const gasUnits = config.gasUnits ?? AQUA_SWAP_GAS_UNITS;
 
   return {
@@ -191,7 +204,7 @@ export function createLiveAquaQuoteSource(
         },
       ): StrategyTokenHealth => ({
         address,
-        symbol: symbolForAddress(address),
+        symbol: (config.resolveSymbol ?? symbolForAddress)(address),
         virtualBalance: entry.virtualBalance.toString(),
         actualBalance: entry.actualBalance.toString(),
         aquaAllowance: entry.aquaAllowance.toString(),
