@@ -682,3 +682,174 @@ describe("both token directions", () => {
     expect(body.selectedVenue).toBe("UNISWAP");
   });
 });
+
+describe(`POST ${API_ROUTES.transactionsAqua}`, () => {
+  const STRATEGY_ORDER = {
+    maker: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as `0x${string}`,
+    traits: 1n,
+    data: "0xdeadbeef" as `0x${string}`,
+  };
+  const ROUTER = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9" as `0x${string}`;
+
+  const aquaExecution = {
+    routerAddress: ROUTER,
+    strategy: {
+      chainId: 42161,
+      maker: STRATEGY_ORDER.maker,
+      strategyHash: STRATEGY as `0x${string}`,
+      baseToken: WBTC as `0x${string}`,
+      quoteToken: USDC as `0x${string}`,
+      rebateSigner: STRATEGY_ORDER.maker,
+      order: STRATEGY_ORDER,
+      sampleQuote: {
+        tokenIn: WBTC as `0x${string}`,
+        tokenOut: USDC as `0x${string}`,
+        amountIn: 1_000_000n,
+        amountOut: 640_000_000n,
+        isExactIn: true,
+      },
+    },
+  };
+
+  const serverWithExecution = (
+    execution: typeof aquaExecution | null = aquaExecution,
+  ) =>
+    buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_COMPETITIVE_FIXTURE,
+          midPriceE18: 64_500n * 10n ** 18n,
+          knownStrategyHash: STRATEGY as `0x${string}`,
+        }),
+        uniswapClient: stubUniswapClient(),
+        aquaExecution: execution,
+        executions: createExecutionStore({
+          dir: "/evidence",
+          fs: memoryFs(),
+          now: () => 1_753_000_000_000,
+        }),
+      },
+    );
+
+  const buildAqua = (server: BuiltServer, quoteSessionId: string) =>
+    server.app.inject({
+      method: "POST",
+      url: API_ROUTES.transactionsAqua,
+      payload: { quoteSessionId },
+    });
+
+  it("builds router calldata that binds the quoted minimum", async () => {
+    built = serverWithExecution();
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    expect(quote.selectedVenue).toBe("AQUA");
+
+    const res = await buildAqua(built, quote.quoteSessionId);
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      to: string;
+      data: string;
+      value: string;
+      minimumAmountOut: string;
+      spender: string;
+    };
+    expect(body.to).toBe(ROUTER);
+    // The taker approves the router itself, not a Permit2-style spender.
+    expect(body.spender).toBe(ROUTER);
+    expect(body.value).toBe("0");
+    expect(body.data.startsWith("0x")).toBe(true);
+    expect(body.data.length).toBeGreaterThan(10);
+    // The floor shown in the comparison is the floor encoded in the calldata.
+    expect(body.minimumAmountOut).toBe(quote.comparison.aqua!.minimumAmountOut);
+    // …and it is physically present in the taker-traits tail.
+    const threshold = BigInt(body.minimumAmountOut)
+      .toString(16)
+      .padStart(64, "0");
+    expect(body.data.toLowerCase()).toContain(threshold);
+  });
+
+  it("is single-use, exactly like the Uniswap builder", async () => {
+    built = serverWithExecution();
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    expect((await buildAqua(built, quote.quoteSessionId)).statusCode).toBe(200);
+    const replay = await buildAqua(built, quote.quoteSessionId);
+
+    expect(replay.statusCode).toBe(409);
+    expect(zApiError.parse(replay.json()).error.code).toBe(
+      "SESSION_ALREADY_USED",
+    );
+  });
+
+  it("refuses a session where Uniswap won", async () => {
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_UNCOMPETITIVE_FIXTURE,
+          midPriceE18: 64_500n * 10n ** 18n,
+          knownStrategyHash: STRATEGY as `0x${string}`,
+        }),
+        uniswapClient: stubUniswapClient(),
+        aquaExecution,
+      },
+    );
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    expect(quote.selectedVenue).toBe("UNISWAP");
+
+    const res = await buildAqua(built, quote.quoteSessionId);
+
+    expect(res.statusCode).toBe(409);
+    expect(zApiError.parse(res.json()).error.code).toBe("NOT_AN_AQUA_SESSION");
+  });
+
+  it("refuses to fabricate a transaction when no strategy is deployed", async () => {
+    // Fixture-only mode: quotes are simulated, so there is no real order to
+    // build against. Saying so beats inventing one (§21).
+    built = serverWithExecution(null);
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    const res = await buildAqua(built, quote.quoteSessionId);
+
+    expect(res.statusCode).toBe(503);
+    expect(zApiError.parse(res.json()).error.code).toBe(
+      "AQUA_EXECUTION_UNAVAILABLE",
+    );
+  });
+
+  it("rejects an unknown session id", async () => {
+    built = serverWithExecution();
+    const res = await buildAqua(built, "00000000-0000-4000-8000-000000000000");
+
+    expect(res.statusCode).toBe(404);
+    expect(zApiError.parse(res.json()).error.code).toBe("SESSION_NOT_FOUND");
+  });
+
+  it("records evidence without claiming settlement", async () => {
+    built = serverWithExecution();
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    await buildAqua(built, quote.quoteSessionId);
+
+    const res = await built.app.inject({
+      method: "GET",
+      url: API_ROUTES.executions,
+    });
+    const { executions } = res.json() as {
+      executions: {
+        kind: string;
+        strategyHash: string | null;
+        txHash: string | null;
+        amountOut: string | null;
+      }[];
+    };
+
+    expect(executions[0]!.kind).toBe("BEST_EXECUTION_AQUA");
+    expect(executions[0]!.strategyHash).toBe(STRATEGY);
+    // Built, not broadcast.
+    expect(executions[0]!.txHash).toBeNull();
+    expect(executions[0]!.amountOut).toBeNull();
+  });
+});
