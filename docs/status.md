@@ -2,20 +2,20 @@
 
 ## Current gate
 
-Phases 0, 1, 2, 3, and 5 have passed. Phase 4 is held on a per-venue data
-labeling fix, and Phase 6 (Vortex Grow) is open.
+Phases 0 through 5 have all passed. Phase 6 (Vortex Grow) is one test short of
+exit; Phase 7 (API-powered Grow leg) and Phase 8 (polish and freeze) remain.
 
-Verified green at `29b62ef`: **445 tests** — contracts 103, shared 25, api 188
-(plus 1 opt-in fork test), web 129. Both the commit-policy and architecture
-guards pass; 86 commits policy-clean.
+Verified green at `3efcf09`: **505 tests** — contracts 142, shared 25, api 206
+(plus 1 opt-in fork test), web 132. Both the commit-policy and architecture
+guards pass; 97 commits policy-clean.
 
 ## Contracts
-- Current task: Phase 6 — VortexCompounder, route validation, MockStalePool,
-  MockExternalRouter
-- Last commit: fixture strategy health scoped to the demo strategy
-- Tests: 103/103 forge green — Vortex Swap 33, Vortex PermAMM 21 run twice
-  across both token orderings, Aqua baseline 11, token math 7, plus supporting
-  suites
+- Current task: Phase 6 close-out — a reentrancy test against a malicious
+  external target; the rest of the Grow suite is complete
+- Last commit: Grow suite run in both token orientations
+- Tests: 142/142 forge green — Vortex Grow 18 across both directions and both
+  token orderings, Vortex PermAMM 21 across both orderings, Vortex Swap 33,
+  Aqua baseline 11, token math 7, plus supporting suites
 - Blocker: none
 - Interface changes: PermAMM fee authorization typehash pinned to the shared
   typed-data definition and asserted in a test
@@ -30,12 +30,10 @@ guards pass; 86 commits policy-clean.
   longer treated as a viable venue
 
 ## Frontend
-- Current task: Phase 4 — move the simulated-data badge from the comparison
-  panel onto each venue card, so a response mixing a fixture Aqua quote with a
-  live Uniswap quote labels both correctly
-- Last commit: synthetic fixture identifiers
-- Tests: 129 green, typecheck clean, production build serves all routes
-- Blocker: none; the not-found-code dependency is resolved
+- Current task: Phase 4 passed; Grow and demo surfaces next
+- Last commit: quote provenance badged per venue rather than per response
+- Tests: 132 green, typecheck clean, production build serves all routes
+- Blocker: none
 - Interface changes: none
 
 ## Integration
