@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { PageHeader } from "@/components/page-header";
 import { PhaseBadge } from "@/components/phase-badge";
+import { Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
 
 export const metadata: Metadata = {
-  title: "Architecture — Vortex",
+  title: "Architecture · Vortex",
   description:
     "How one maker inventory powers Vortex Swap, Vortex Grow, and the Vortex PermAMM.",
 };
@@ -20,7 +20,7 @@ const products = [
   },
   {
     name: "Vortex Grow",
-    summary: "Same-asset compounding — Grow WBTC",
+    summary: "Same-asset compounding: Grow WBTC",
     bullets: [
       "Custom Aqua app that temporarily pulls maker WBTC for one atomic cycle.",
       "Cycle runs across the Vortex PermAMM and an external venue (Uniswap API route).",
@@ -40,7 +40,7 @@ const products = [
 ] as const;
 
 const uniswapRoles = [
-  "Benchmarks every Aqua quote against real external liquidity — best execution is a measured claim, not a slogan.",
+  "Benchmarks every Aqua quote against real external liquidity, so best execution is a measured claim rather than a slogan.",
   "Builds and executes the fallback swap: when Uniswap wins, the exact API-built transaction is submitted unchanged.",
   "Builds the external leg of the Grow cycle (USDC back to WBTC).",
   "Request IDs and transaction hashes are surfaced in the UI so every routed trade is traceable.",
@@ -113,133 +113,218 @@ const phases = [
   },
 ] as const;
 
-const inventoryTree = `One maker inventory — WBTC/USDC on Arbitrum One
-├─ Vortex Swap      inventory-aware quotes vs the Uniswap Trading API
-├─ Vortex Grow      atomic same-asset compounding of maker WBTC
-└─ Vortex PermAMM   Uniswap v4 dynamic-fee pool + hook, one leg of the Grow cycle`;
+/**
+ * The tree is a real ASCII diagram, so it is set in mono and padded to a fixed
+ * column. Product names carry the accent; the branch glyphs recede.
+ */
+const TREE_ROOT = "One maker inventory: WBTC/USDC on Arbitrum One";
+
+const TREE_BRANCHES = [
+  {
+    glyph: "├─ ",
+    name: "Vortex Swap",
+    pad: "      ",
+    note: "inventory-aware quotes vs the Uniswap Trading API",
+  },
+  {
+    glyph: "├─ ",
+    name: "Vortex Grow",
+    pad: "      ",
+    note: "atomic same-asset compounding of maker WBTC",
+  },
+  {
+    glyph: "└─ ",
+    name: "Vortex PermAMM",
+    pad: "   ",
+    note: "Uniswap v4 dynamic-fee pool + hook, one leg of the Grow cycle",
+  },
+] as const;
 
 export default function ArchitecturePage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <PageHeader
-        overline="Vortex"
+    <Page>
+      <PageHead
         title="Architecture"
-        description="Programmable market-making on Arbitrum One. One maker inventory of WBTC and USDC powers three products that share custody, pricing, and profit."
-        badge={<PhaseBadge phase={4} label="Phase 4 — in progress" state="active" />}
+        lead="Programmable market-making on Arbitrum One. One maker inventory of WBTC and USDC powers three products that share custody, pricing, and profit."
+        aside={<PhaseBadge phase={4} label="Phase 4, in progress" state="active" />}
       />
 
-      <section className="mt-10 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          One inventory, three products
-        </h2>
-        <pre className="mt-4 overflow-x-auto whitespace-pre font-mono text-sm leading-relaxed text-zinc-300">
-          {inventoryTree}
-        </pre>
-      </section>
+      <div className="space-y-6">
+        {/*
+          The signature panel: the one chamfered silhouette on this page, and the
+          single idea everything below elaborates. Padded clear of the cut.
+        */}
+        <section className="panel cut-tr p-6 pr-9 sm:p-8 sm:pr-11">
+          <h2 className="text-2xl leading-tight text-say-1 sm:text-[1.75rem]">
+            One inventory, three products
+          </h2>
+          <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-say-2">
+            Custody, pricing and profit all resolve to a single WBTC/USDC book.
+            Every product below is a different way of putting that one book to
+            work, which is why a fill in one of them changes the quotes in the
+            others.
+          </p>
+          <div className="mt-7 overflow-x-auto">
+            <pre className="num min-w-max text-[13px] leading-[2] text-say-2">
+              <span className="text-say-1">{TREE_ROOT}</span>
+              {TREE_BRANCHES.map((branch) => (
+                <span key={branch.name}>
+                  {"\n"}
+                  <span className="text-say-3">{branch.glyph}</span>
+                  <span className="text-cu">{branch.name}</span>
+                  {branch.pad}
+                  {branch.note}
+                </span>
+              ))}
+            </pre>
+          </div>
+        </section>
 
-      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {products.map((product) => (
-          <section
-            key={product.name}
-            className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
-          >
-            <h3 className="text-lg font-semibold text-zinc-100">{product.name}</h3>
-            <p className="mt-0.5 text-sm text-teal-400">{product.summary}</p>
-            <ul className="mt-3 flex list-disc flex-col gap-2 pl-4 text-sm leading-relaxed text-zinc-400">
-              {product.bullets.map((bullet) => (
-                <li key={bullet}>{bullet}</li>
+        {/*
+          Subgrid so the three names sit on one line, the three summaries on the
+          next, and the bullet lists all start at the same y, whatever the copy
+          length does at a given width.
+        */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:grid-rows-[auto_auto_1fr] lg:gap-y-2">
+          {products.map((product) => (
+            <section
+              key={product.name}
+              className="panel p-6 lg:row-span-3 lg:grid lg:grid-rows-subgrid"
+            >
+              <h3 className="text-xl text-say-1">{product.name}</h3>
+              <p className="mt-1 text-sm text-cu lg:mt-0">{product.summary}</p>
+              <ul className="mt-4 space-y-2.5 lg:mt-2">
+                {product.bullets.map((bullet) => (
+                  <li
+                    key={bullet}
+                    className="flex gap-2.5 text-sm leading-relaxed text-say-2"
+                  >
+                    <StatusMark tone="muted" className="mt-[7px] shrink-0" />
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+
+        <section className="panel-raised p-6 sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,19rem)_minmax(0,1fr)] lg:gap-10">
+            <div>
+              <h2 className="text-2xl leading-tight text-say-1">
+                Why the Uniswap API is load-bearing
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-say-2">
+                It is not a fallback bolted on at the end. It is the benchmark
+                every best-execution claim on this site is measured against, and
+                the builder that settles the trade whenever it wins.
+              </p>
+            </div>
+            <ul className="grid gap-4 sm:grid-cols-2 lg:gap-x-8">
+              {uniswapRoles.map((role) => (
+                <li
+                  key={role}
+                  className="flex gap-2.5 text-sm leading-relaxed text-say-1"
+                >
+                  <StatusMark tone="accent" className="mt-[7px] shrink-0" />
+                  <span>{role}</span>
+                </li>
               ))}
             </ul>
-          </section>
-        ))}
+          </div>
+        </section>
+
+        <Panel title="Monorepo map">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[30rem] text-left">
+              <thead>
+                <tr className="text-xs text-say-3">
+                  <th scope="col" className="pb-2.5 pr-6 font-normal">
+                    Package
+                  </th>
+                  <th scope="col" className="pb-3.5 font-normal">
+                    Role
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgba(255,238,222,0.05)]">
+                {monorepo.map((entry) => (
+                  <tr key={entry.path}>
+                    <td className="py-3 pr-6 align-top">
+                      <span className="num text-sm text-say-1">{entry.path}</span>
+                    </td>
+                    <td className="py-3 align-top text-sm text-say-2">
+                      {entry.role}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+
+        <Panel
+          title="Build phases"
+          aside={
+            <span className="text-xs text-say-3">
+              Exit criteria, not aspirations
+            </span>
+          }
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[46rem] text-left">
+              <thead>
+                <tr className="text-xs text-say-3">
+                  <th scope="col" className="pb-3.5 pr-5 font-normal">
+                    Phase
+                  </th>
+                  <th scope="col" className="pb-3.5 pr-5 font-normal">
+                    Name
+                  </th>
+                  <th scope="col" className="pb-3.5 pr-5 font-normal">
+                    Exit criterion
+                  </th>
+                  <th scope="col" className="pb-3.5 font-normal">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgba(255,238,222,0.05)]">
+                {phases.map((entry) => (
+                  <tr key={entry.phase}>
+                    <td className="py-3.5 pr-5 align-top">
+                      <span className="num text-sm text-say-3">{entry.phase}</span>
+                    </td>
+                    <td className="py-3.5 pr-5 align-top text-sm text-say-1">
+                      {entry.name}
+                    </td>
+                    <td className="py-3.5 pr-5 align-top text-sm leading-relaxed text-say-2">
+                      {entry.exit}
+                    </td>
+                    <td className="py-3.5 align-top">
+                      {entry.status === "passed" ? (
+                        <PhaseBadge
+                          phase={entry.phase}
+                          label="Passed"
+                          state="passed"
+                        />
+                      ) : entry.status === "active" ? (
+                        <PhaseBadge
+                          phase={entry.phase}
+                          label="In progress"
+                          state="active"
+                        />
+                      ) : (
+                        <PhaseBadge phase={entry.phase} label="Pending" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       </div>
-
-      <section className="mt-6 rounded-xl border border-teal-500/30 bg-teal-500/10 p-6">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-teal-400">
-          Why the Uniswap API is load-bearing
-        </h2>
-        <ul className="mt-3 flex list-disc flex-col gap-2 pl-4 text-sm leading-relaxed text-zinc-300">
-          {uniswapRoles.map((role) => (
-            <li key={role}>{role}</li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Monorepo map
-        </h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="py-2 pr-4 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Package
-                </th>
-                <th className="py-2 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Role
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {monorepo.map((entry) => (
-                <tr key={entry.path} className="border-b border-zinc-800/60 last:border-b-0">
-                  <td className="py-3 pr-4 font-mono text-zinc-100">{entry.path}</td>
-                  <td className="py-3 text-zinc-400">{entry.role}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Build phases
-        </h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[44rem] text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="py-2 pr-4 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Phase
-                </th>
-                <th className="py-2 pr-4 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Name
-                </th>
-                <th className="py-2 pr-4 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Exit criterion
-                </th>
-                <th className="py-2 text-xs font-medium uppercase tracking-widest text-zinc-500">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {phases.map((entry) => (
-                <tr key={entry.phase} className="border-b border-zinc-800/60 last:border-b-0">
-                  <td className="py-3 pr-4 font-mono tabular-nums text-zinc-100">
-                    {entry.phase}
-                  </td>
-                  <td className="py-3 pr-4 text-zinc-100">{entry.name}</td>
-                  <td className="py-3 pr-4 leading-relaxed text-zinc-400">{entry.exit}</td>
-                  <td className="py-3">
-                    {entry.status === "passed" ? (
-                      <span className="inline-flex items-center rounded-full border border-teal-500/40 bg-teal-500/20 px-2.5 py-0.5 text-xs font-medium text-teal-200">
-                        Passed
-                      </span>
-                    ) : entry.status === "active" ? (
-                      <PhaseBadge phase={entry.phase} label="In progress" state="active" />
-                    ) : (
-                      <PhaseBadge phase={entry.phase} label="Pending" />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+    </Page>
   );
 }

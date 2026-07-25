@@ -48,22 +48,22 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </div>
 
             {/*
-              The signature, anchored flush to the bottom edge with no gap
-              beneath it and clipped intentionally, sitting above the substrate
-              rather than buried behind it. The mark and the word are one lockup
-              at scale, not an icon parked in a tile.
+              The signature: mark and wordmark as one lockup, the mark sized in
+              em so the two scale together at every width instead of one
+              dwarfing the other. It sits above the substrate rather than behind
+              it, anchored flush to the bottom with no gap beneath, with room
+              above so no cap is shaved by the edge.
             */}
-            <div className="relative mx-auto flex w-full max-w-6xl items-end gap-5 px-6 sm:px-8">
+            <div
+              className="relative mx-auto flex w-full max-w-6xl items-end gap-[0.14em] px-6 text-[clamp(3.5rem,16vw,10.5rem)] sm:px-8"
+              aria-hidden="true"
+            >
               <VortexMark
-                size={104}
+                size={100}
                 strokeWidth={4}
-                className="mb-[-0.32em] shrink-0 text-cu-dim"
+                className="mb-[0.1em] h-[0.62em] w-[0.62em] shrink-0 text-cu-dim"
               />
-              <p
-                aria-hidden="true"
-                className="font-display select-none text-[clamp(4rem,17vw,11rem)] leading-[0.78] tracking-[0.02em] text-ink-2"
-                style={{ marginBottom: "-0.14em" }}
-              >
+              <p className="font-display select-none pt-[0.12em] leading-[0.74] tracking-[0.01em] text-ink-2">
                 Vortex
               </p>
             </div>

@@ -1,6 +1,7 @@
 import type { GrowOpportunity } from "@vortex/shared";
 import { USDC, WBTC } from "@vortex/shared";
 import { SourceBadge } from "@/components/source-badge";
+import { Panel, Rows, StatusMark } from "@/components/ui/primitives";
 import type { DataSource } from "@/lib/api/source";
 import { formatTokenAmount, truncateAddress } from "@/lib/format";
 
@@ -13,16 +14,21 @@ function wbtc(value: bigint): string {
   return formatTokenAmount(value, WBTC.decimals);
 }
 
-function Row({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {
+function DetailRow({
+  label,
+  value,
+  title,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+}) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-2">
-      <dt className="text-sm text-zinc-400">{label}</dt>
+    <div className="flex items-baseline justify-between gap-5 py-2.5">
+      <dt className="text-sm leading-snug text-say-2">{label}</dt>
       <dd
-        className={
-          emphasis
-            ? "font-mono text-sm tabular-nums text-teal-300"
-            : "font-mono text-sm tabular-nums text-zinc-100"
-        }
+        className="num shrink-0 whitespace-nowrap text-sm text-say-1"
+        title={title}
       >
         {value}
       </dd>
@@ -30,6 +36,12 @@ function Row({ label, value, emphasis = false }: { label: string; value: string;
   );
 }
 
+/**
+ * The priced cycle. Three things decide whether it is worth running, so those
+ * three carry the weight: which way round the legs go, how long the quote is
+ * still good for, and the floor the contract will enforce. Everything else is
+ * supporting detail and is set to read as such.
+ */
 export function OpportunityCard({
   opportunity,
   source,
@@ -42,68 +54,85 @@ export function OpportunityCard({
   const principal = BigInt(opportunity.principalAmount);
   const grossProfit = BigInt(opportunity.estimatedGrossProfit);
   const expired = secondsRemaining !== null && secondsRemaining === 0;
+  const urgent = secondsRemaining !== null && secondsRemaining > 0 && secondsRemaining <= 10;
+
+  const expiryTone = expired ? "text-loss" : urgent ? "text-warn" : "text-say-1";
 
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Opportunity
-        </h2>
-        <SourceBadge source={source} />
-      </header>
-
-      <dl className="divide-y divide-zinc-800/60">
-        <Row label="Principal" value={`${wbtc(principal)} WBTC`} />
-        <Row label="Route" value={ROUTE_LABEL[opportunity.direction]} />
-        <Row
-          label="Bridge amount"
-          value={`${formatTokenAmount(BigInt(opportunity.bridgeAmount), USDC.decimals, 2)} USDC`}
-        />
-        <Row label="Expected final" value={`${wbtc(principal + grossProfit)} WBTC`} />
-        <Row
-          label="Minimum final"
-          value={`${wbtc(BigInt(opportunity.minFinalAsset))} WBTC`}
-          emphasis
-        />
-        <Row
-          label="Minimum maker profit"
-          value={`${wbtc(BigInt(opportunity.minimumProfit))} WBTC`}
-        />
-        <Row
-          label="Performance fee"
-          value={`${wbtc(BigInt(opportunity.performanceFee))} WBTC`}
-        />
-        <div className="flex items-baseline justify-between gap-4 py-2">
-          <dt className="text-sm text-zinc-400">Expiry</dt>
-          <dd
-            aria-live="off"
-            className={
-              expired
-                ? "font-mono text-sm tabular-nums text-red-400"
-                : secondsRemaining !== null && secondsRemaining <= 10
-                  ? "font-mono text-sm tabular-nums text-amber-400"
-                  : "font-mono text-sm tabular-nums text-zinc-100"
-            }
-          >
-            {secondsRemaining === null
-              ? "—"
-              : expired
-                ? "Expired"
-                : `${secondsRemaining}s`}
-          </dd>
+    <Panel title="Opportunity" aside={<SourceBadge source={source} />}>
+      {/*
+        Two parallel columns on one grid: the labels share a line and the values
+        share a line, whatever the length of the route name.
+      */}
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2">
+        <div className="min-w-0">
+          <p className="text-sm text-say-2">Route</p>
+          <p className="mt-2 text-base leading-snug text-say-1">
+            {ROUTE_LABEL[opportunity.direction]}
+          </p>
         </div>
-        {opportunity.uniswap === undefined ? null : (
-          <div className="flex items-baseline justify-between gap-4 py-2">
-            <dt className="text-sm text-zinc-400">Uniswap request ID</dt>
-            <dd
-              className="font-mono text-sm tabular-nums text-zinc-100"
+        <div className="min-w-0 sm:text-right">
+          <p className="text-sm text-say-2">Quote expires in</p>
+          <p className="mt-2 flex items-center gap-2 sm:justify-end">
+            {expired || urgent ? (
+              <StatusMark tone={expired ? "loss" : "warn"} />
+            ) : null}
+            {/*
+              The countdown re-renders every second; announcing it would talk
+              over everything else on the page.
+            */}
+            <span aria-live="off" className={`num text-base leading-snug ${expiryTone}`}>
+              {secondsRemaining === null
+                ? "—"
+                : expired
+                  ? "Expired"
+                  : `${secondsRemaining}s`}
+            </span>
+          </p>
+        </div>
+      </div>
+
+      {/* The floor the contract enforces: the number that decides the run. */}
+      <div className="panel-raised mt-6 px-5 py-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1">
+          <p className="text-sm text-say-2">Minimum final</p>
+          <p className="num whitespace-nowrap text-xl text-say-1 sm:text-2xl">
+            {`${wbtc(BigInt(opportunity.minFinalAsset))} WBTC`}
+          </p>
+        </div>
+        <p className="mt-2.5 text-xs leading-relaxed text-say-3">
+          The cycle reverts unless the maker ends above this figure.
+        </p>
+      </div>
+
+      <div className="mt-4">
+        <Rows>
+          <DetailRow label="Principal" value={`${wbtc(principal)} WBTC`} />
+          <DetailRow
+            label="Bridge amount"
+            value={`${formatTokenAmount(BigInt(opportunity.bridgeAmount), USDC.decimals, 2)} USDC`}
+          />
+          <DetailRow
+            label="Expected final"
+            value={`${wbtc(principal + grossProfit)} WBTC`}
+          />
+          <DetailRow
+            label="Minimum maker profit"
+            value={`${wbtc(BigInt(opportunity.minimumProfit))} WBTC`}
+          />
+          <DetailRow
+            label="Performance fee"
+            value={`${wbtc(BigInt(opportunity.performanceFee))} WBTC`}
+          />
+          {opportunity.uniswap === undefined ? null : (
+            <DetailRow
+              label="Uniswap request ID"
+              value={truncateAddress(opportunity.uniswap.requestId)}
               title={opportunity.uniswap.requestId}
-            >
-              {truncateAddress(opportunity.uniswap.requestId)}
-            </dd>
-          </div>
-        )}
-      </dl>
-    </section>
+            />
+          )}
+        </Rows>
+      </div>
+    </Panel>
   );
 }

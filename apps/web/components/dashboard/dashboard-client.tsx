@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import type { ExecutionKind, ExecutionRecord } from "@vortex/shared";
 import { TOKENS, WBTC } from "@vortex/shared";
 import { CoveragePanel } from "@/components/maker/coverage-panel";
-import { PageHeader } from "@/components/page-header";
 import { FixtureNotice, SourceBadge } from "@/components/source-badge";
+import { Page, PageHead, Panel, Row, Rows, StatusMark } from "@/components/ui/primitives";
 import { useConfig, useExecutions, useStrategyHealth } from "@/hooks/useVortexQueries";
 import { ApiRequestError } from "@/lib/api";
 import { formatTokenAmount, truncateAddress } from "@/lib/format";
@@ -85,39 +85,77 @@ function RelativeTime({ timestamp }: { timestamp: number }) {
   return <span suppressHydrationWarning>{label}</span>;
 }
 
-function Panel({
-  title,
-  source,
-  children,
+/**
+ * A label/value row whose value is prose, not data: reachability and feature
+ * flags are words, so they stay in the UI face rather than borrowing the
+ * numeric one.
+ */
+function Fact({
+  label,
+  value,
+  tone = "default",
 }: {
-  title: string;
-  source?: "live" | "fixture";
-  children: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "default" | "gain" | "warn" | "loss" | "muted";
 }) {
+  const toneClass =
+    tone === "gain"
+      ? "text-gain"
+      : tone === "warn"
+        ? "text-warn"
+        : tone === "loss"
+          ? "text-loss"
+          : tone === "muted"
+            ? "text-say-3"
+            : "text-say-1";
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          {title}
-        </h2>
-        {source === undefined ? null : <SourceBadge source={source} />}
-      </header>
-      {children}
-    </section>
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <dt className="text-sm text-say-2">{label}</dt>
+      <dd className={`text-sm ${toneClass}`}>{value}</dd>
+    </div>
   );
 }
 
-function Pill({ label, on }: { label: string; on: boolean }) {
+/** Nothing has arrived yet, so nothing is claimed yet. */
+function CoveragePending({ title }: { title: string }) {
   return (
-    <span
-      className={
-        on
-          ? "inline-flex items-center rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-400"
-          : "inline-flex items-center rounded-full border border-zinc-700 bg-zinc-800/50 px-2.5 py-0.5 text-xs font-medium text-zinc-400"
-      }
-    >
-      {label} {on ? "on" : "off"}
-    </span>
+    <Panel title={title} aside={<span className="text-xs text-say-3">Reading…</span>}>
+      <p className="max-w-prose text-sm leading-relaxed text-say-2">
+        Reading virtual balances, wallet balances and Aqua allowances for this
+        strategy. Coverage appears once the API answers, and not before.
+      </p>
+    </Panel>
+  );
+}
+
+/** An empty or failed surface still has to say what it is and why it is bare. */
+function EmptyState({
+  tone,
+  headline,
+  children,
+  detail,
+}: {
+  tone: "muted" | "loss";
+  headline: string;
+  children: React.ReactNode;
+  detail?: string;
+}) {
+  return (
+    <div className="panel-raised px-6 py-10 text-center">
+      <StatusMark tone={tone} className="mb-4" />
+      <p className={`text-sm ${tone === "loss" ? "text-loss" : "text-say-1"}`}>
+        {headline}
+      </p>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-say-2">
+        {children}
+      </p>
+      {detail === undefined ? null : (
+        <p className="num mx-auto mt-3 max-w-md text-xs leading-relaxed text-say-3">
+          {detail}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -133,6 +171,8 @@ export function DashboardClient() {
 
   const records = executions.data?.data ?? [];
   const totals = aggregateGrow(records);
+  const makerProfit = totals.grossProfit - totals.performanceFee;
+  const executionsFailed = executions.error instanceof Error;
   const anyFixture = [config.data, executions.data, swapHealth.data, growHealth.data].some(
     (result) => result?.source === "fixture",
   );
@@ -147,144 +187,242 @@ export function DashboardClient() {
     error instanceof Error ? [{ label, message: describeError(error) }] : [],
   );
 
+  const apiStatus =
+    config.error instanceof Error
+      ? "Error"
+      : config.data === undefined
+        ? "—"
+        : config.data.source === "live"
+          ? failures.length === 0
+            ? "Reachable"
+            : "Reachable, some reads failing"
+          : "Not reachable";
+  const apiTone =
+    apiStatus === "Reachable"
+      ? "gain"
+      : apiStatus === "Error"
+        ? "loss"
+        : apiStatus === "—"
+          ? "muted"
+          : "warn";
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <PageHeader
-        overline="Operations"
+    <Page>
+      <PageHead
         title="Dashboard"
-        description="What the system actually did: which venue won, what moved onchain, and what the maker earned."
+        lead="What the system actually did: which venue won, what moved onchain, and what the maker earned."
       />
 
       {anyFixture ? <FixtureNotice className="mb-6" /> : null}
 
       {failures.length === 0 ? null : (
-        <div
-          role="alert"
-          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-        >
-          <p className="mb-1 font-medium text-red-300">
-            Some reads failed — the panels below are incomplete.
-          </p>
-          <ul className="list-inside list-disc">
-            {failures.map((failure) => (
-              <li key={failure.label}>
-                {failure.label}: {failure.message}
-              </li>
-            ))}
-          </ul>
+        <div role="alert" className="panel-raised mb-6 flex gap-3 p-4">
+          <StatusMark tone="loss" className="mt-[7px] shrink-0" />
+          <div className="min-w-0 flex-1 text-sm leading-relaxed text-say-2">
+            <p className="text-loss">
+              Some reads failed. The panels below are incomplete rather than
+              empty.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {failures.map((failure) => (
+                <li key={failure.label}>
+                  <span className="text-say-1">{failure.label}</span>:{" "}
+                  {failure.message}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Panel title="System status" source={config.data?.source}>
-          <dl className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">API</dt>
-              <dd className="text-sm text-zinc-100">
-                {config.error instanceof Error
-                  ? "Error"
-                  : config.data === undefined
-                    ? "—"
-                    : config.data.source === "live"
-                      ? failures.length === 0
-                        ? "Reachable"
-                        : "Reachable, some reads failing"
-                      : "Not reachable"}
-              </dd>
+      {/* 1. What the inventory earned. The money leads the page. */}
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Panel
+          cut
+          title="Grow results"
+          aside={
+            executions.data === undefined ? null : (
+              <SourceBadge source={executions.data.source} />
+            )
+          }
+        >
+          {executionsFailed ? (
+            <EmptyState
+              tone="loss"
+              headline="Totals are unavailable."
+              detail={
+                executions.error instanceof Error
+                  ? describeError(executions.error)
+                  : undefined
+              }
+            >
+              The execution history could not be read, so there is nothing to
+              total. These figures are only ever summed from real records.
+            </EmptyState>
+          ) : executions.data === undefined ? (
+            <EmptyState tone="muted" headline="Reading execution history…">
+              Every figure here is summed from the records themselves, so none
+              of them appear until the history arrives.
+            </EmptyState>
+          ) : totals.cycles === 0 ? (
+            <EmptyState tone="muted" headline="No Grow cycles have settled yet.">
+              Each atomic cycle returns more WBTC than it borrowed. When one
+              lands, its realized profit, the maker&apos;s share and the
+              performance fee are summed here.
+            </EmptyState>
+          ) : (
+            <div>
+              <p className="text-sm text-say-2">Maker profit</p>
+              <p
+                className={`num mt-2 text-2xl leading-none sm:text-3xl ${
+                  makerProfit > 0n ? "text-gain" : "text-say-1"
+                }`}
+              >
+                {`${formatTokenAmount(makerProfit, WBTC.decimals)} WBTC`}
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-say-2">
+                Realized across {totals.cycles}{" "}
+                {totals.cycles === 1 ? "cycle" : "cycles"}, after the performance
+                fee.
+              </p>
+
+              <div className="mt-6">
+                <Rows>
+                  <Row label="Cycles executed" value={totals.cycles} />
+                  <Row
+                    label="Gross profit"
+                    value={`${formatTokenAmount(totals.grossProfit, WBTC.decimals)} WBTC`}
+                  />
+                  <Row
+                    label="Performance fee"
+                    value={`${formatTokenAmount(totals.performanceFee, WBTC.decimals)} WBTC`}
+                  />
+                </Rows>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">Chain</dt>
-              <dd className="font-mono text-sm tabular-nums text-zinc-100">
-                {config.data?.data.chainId ?? "—"}
-              </dd>
-            </div>
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Pill label="Grow" on={config.data?.data.features.growEnabled ?? false} />
-            <Pill label="Demo mode" on={config.data?.data.features.demoMode ?? false} />
-          </div>
+          )}
         </Panel>
 
-        <Panel title="Grow results" source={executions.data?.source}>
-          <dl className="space-y-2">
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">Cycles executed</dt>
-              <dd className="font-mono text-sm tabular-nums text-zinc-100">
-                {totals.cycles === 0 ? "—" : totals.cycles}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">Gross profit</dt>
-              <dd className="font-mono text-sm tabular-nums text-zinc-100">
-                {totals.cycles === 0
-                  ? "—"
-                  : `${formatTokenAmount(totals.grossProfit, WBTC.decimals)} WBTC`}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">Maker profit</dt>
-              <dd className="font-mono text-sm tabular-nums text-zinc-100">
-                {totals.cycles === 0
-                  ? "—"
-                  : `${formatTokenAmount(totals.grossProfit - totals.performanceFee, WBTC.decimals)} WBTC`}
-              </dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-sm text-zinc-400">Performance fee</dt>
-              <dd className="font-mono text-sm tabular-nums text-zinc-100">
-                {totals.cycles === 0
-                  ? "—"
-                  : `${formatTokenAmount(totals.performanceFee, WBTC.decimals)} WBTC`}
-              </dd>
-            </div>
-          </dl>
+        <Panel
+          title="System status"
+          aside={
+            config.data === undefined ? null : <SourceBadge source={config.data.source} />
+          }
+        >
+          <Rows>
+            <Fact label="API" value={apiStatus} tone={apiTone} />
+            <Row
+              label="Chain"
+              value={config.data?.data.chainId ?? "—"}
+              tone={config.data === undefined ? "muted" : "default"}
+            />
+            <Fact
+              label="Grow"
+              value={config.data?.data.features.growEnabled === true ? "Enabled" : "Disabled"}
+              tone={config.data?.data.features.growEnabled === true ? "gain" : "muted"}
+            />
+            <Fact
+              label="Demo mode"
+              value={config.data?.data.features.demoMode === true ? "On" : "Off"}
+              tone={config.data?.data.features.demoMode === true ? "warn" : "muted"}
+            />
+          </Rows>
         </Panel>
       </div>
 
+      {/* 2. What backs it: coverage is the solvency read behind those totals. */}
+      <div className="mt-6 space-y-6">
+        {swapHealth.data === undefined ? (
+          swapHealth.error instanceof Error ? null : (
+            <CoveragePending title="Vortex Swap balance coverage" />
+          )
+        ) : (
+          <CoveragePanel
+            health={swapHealth.data.data}
+            source={swapHealth.data.source}
+            title="Vortex Swap balance coverage"
+          />
+        )}
+        {growHealth.data === undefined ? (
+          growHealth.error instanceof Error ? null : (
+            <CoveragePending title="Vortex Grow balance coverage" />
+          )
+        ) : (
+          <CoveragePanel
+            health={growHealth.data.data}
+            source={growHealth.data.source}
+            title="Vortex Grow balance coverage"
+          />
+        )}
+      </div>
+
+      {/* 3. The ledger itself, last: detail for anyone who wants the receipts. */}
       <div className="mt-6">
-        <Panel title="Recent executions" source={executions.data?.source}>
-          {executions.error instanceof Error ? (
-            <p className="text-sm text-red-300">
+        <Panel
+          title="Recent executions"
+          aside={
+            executions.data === undefined ? null : (
+              <SourceBadge source={executions.data.source} />
+            )
+          }
+        >
+          {executionsFailed ? (
+            <EmptyState
+              tone="loss"
+              headline="History unavailable."
+              detail={
+                executions.error instanceof Error
+                  ? describeError(executions.error)
+                  : undefined
+              }
+            >
               Execution history could not be loaded, so this panel is empty for
               an unknown reason rather than because nothing happened.
-            </p>
+            </EmptyState>
+          ) : executions.data === undefined ? (
+            <EmptyState tone="muted" headline="Reading execution history…">
+              The ledger is being read. An empty table is only shown once the
+              API has actually answered with no records.
+            </EmptyState>
           ) : records.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No executions recorded yet.
-            </p>
+            <EmptyState tone="muted" headline="No executions recorded yet.">
+              Every swap routed through Aqua or Uniswap, and every Grow cycle,
+              lands here with its amounts and its transaction hash the moment it
+              settles.
+            </EmptyState>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[52rem] text-left">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-xs uppercase tracking-widest text-zinc-500">
-                    <th scope="col" className="pb-2 pr-4 font-medium">Kind</th>
-                    <th scope="col" className="pb-2 pr-4 text-right font-medium">In</th>
-                    <th scope="col" className="pb-2 pr-4 text-right font-medium">Out</th>
-                    <th scope="col" className="pb-2 pr-4 font-medium">Tx</th>
-                    <th scope="col" className="pb-2 pr-4 font-medium">Uniswap request</th>
-                    <th scope="col" className="pb-2 text-right font-medium">When</th>
+                  <tr>
+                    <th scope="col" className="pb-3 pr-4 text-xs font-normal text-say-3">Kind</th>
+                    <th scope="col" className="pb-3 pr-4 text-right text-xs font-normal text-say-3">In</th>
+                    <th scope="col" className="pb-3 pr-6 text-right text-xs font-normal text-say-3">Out</th>
+                    <th scope="col" className="pb-3 pr-4 text-xs font-normal text-say-3">Tx</th>
+                    <th scope="col" className="pb-3 pr-4 text-xs font-normal text-say-3">Uniswap request</th>
+                    <th scope="col" className="pb-3 text-right text-xs font-normal text-say-3">When</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800/60">
+                <tbody className="divide-y divide-[rgba(255,238,222,0.05)]">
                   {records.map((record) => (
                     <tr key={record.id}>
-                      <td className="py-2 pr-4 text-sm text-zinc-200">
+                      <td className="py-3 pr-4 text-sm text-say-1">
                         {KIND_LABEL[record.kind]}
                       </td>
-                      <td className="py-2 pr-4 text-right font-mono text-sm tabular-nums text-zinc-400">
+                      <td className="num py-3 pr-4 text-right text-sm text-say-2">
                         {formatAmount(record.amountIn, record.tokenIn)}
                       </td>
-                      <td className="py-2 pr-4 text-right font-mono text-sm tabular-nums text-zinc-400">
+                      <td className="num py-3 pr-6 text-right text-sm text-say-1">
                         {formatAmount(record.amountOut, record.tokenOut)}
                       </td>
-                      <td className="py-2 pr-4 font-mono text-sm tabular-nums text-zinc-400">
+                      <td className="num py-3 pr-4 text-xs text-say-3">
                         {record.txHash === null ? (
                           "—"
                         ) : (
                           <span title={record.txHash}>{truncateAddress(record.txHash)}</span>
                         )}
                       </td>
-                      <td className="py-2 pr-4 font-mono text-sm tabular-nums text-zinc-400">
+                      <td className="num py-3 pr-4 text-xs text-say-3">
                         {record.uniswapRequestId === null ? (
                           "—"
                         ) : (
@@ -293,7 +431,7 @@ export function DashboardClient() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2 text-right text-sm text-zinc-500">
+                      <td className="py-3 text-right text-xs text-say-3">
                         <RelativeTime timestamp={record.timestamp} />
                       </td>
                     </tr>
@@ -304,23 +442,6 @@ export function DashboardClient() {
           )}
         </Panel>
       </div>
-
-      <div className="mt-6 space-y-6">
-        {swapHealth.data === undefined ? null : (
-          <CoveragePanel
-            health={swapHealth.data.data}
-            source={swapHealth.data.source}
-            title="Vortex Swap — balance coverage"
-          />
-        )}
-        {growHealth.data === undefined ? null : (
-          <CoveragePanel
-            health={growHealth.data.data}
-            source={growHealth.data.source}
-            title="Vortex Grow — balance coverage"
-          />
-        )}
-      </div>
-    </div>
+    </Page>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { Action } from "@/components/ui/primitives";
 import { basisPointsToPercent, parseTokenAmount } from "@/lib/format";
 
 export type StrategyFieldKind = "amount" | "bps" | "duration";
@@ -44,13 +45,58 @@ function validate(field: StrategyField): string | null {
   return /^\d+$/.test(field.value.trim()) ? null : "Enter a whole number of seconds.";
 }
 
-const STEP_TONE: Record<StepStatus, string> = {
-  pending: "border-zinc-700 text-zinc-500",
-  active: "border-teal-500/50 bg-teal-500/10 text-teal-300",
-  done: "border-teal-500/50 bg-teal-500/20 text-teal-200",
-  error: "border-red-500/50 bg-red-500/10 text-red-300",
-  blocked: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+/**
+ * A sequence, not a checklist. Each state reads through type weight and tone,
+ * and the machine-readable status stays in the screen-reader string so the
+ * meaning never rests on colour alone.
+ */
+const STEP_WORD: Record<StepStatus, string> = {
+  pending: "Waiting",
+  active: "Running",
+  done: "Done",
+  error: "Failed",
+  blocked: "Blocked",
 };
+
+/* Read aloud to screen-reader users, so it says words rather than an enum. */
+const STEP_STATUS_LABEL: Record<StepStatus, string> = {
+  pending: "not started",
+  active: "in progress",
+  done: "done",
+  error: "failed",
+  blocked: "blocked",
+};
+
+const STEP_STATUS_TONE: Record<StepStatus, string> = {
+  pending: "text-say-3",
+  active: "text-cu",
+  done: "text-gain",
+  error: "text-loss",
+  blocked: "text-warn",
+};
+
+const STEP_LABEL_TONE: Record<StepStatus, string> = {
+  pending: "text-say-3",
+  active: "font-medium text-say-1",
+  done: "text-say-2",
+  error: "text-say-1",
+  blocked: "text-say-2",
+};
+
+const STEP_INDEX_TONE: Record<StepStatus, string> = {
+  pending: "text-say-3",
+  active: "text-cu",
+  done: "text-say-2",
+  error: "text-loss",
+  blocked: "text-say-3",
+};
+
+function unitFor(kind: StrategyFieldKind): string | null {
+  if (kind === "bps") {
+    return "bps";
+  }
+  return kind === "duration" ? "seconds" : null;
+}
 
 export function StrategyForm({
   title,
@@ -75,10 +121,17 @@ export function StrategyForm({
 }) {
   const errors = fields.map((field) => validate(field));
   const hasError = errors.some((error) => error !== null);
+  const completed = steps.filter((step) => step.status === "done").length;
 
   return (
+    /*
+      Four sections, four rows. On two columns the rows are subgridded from the
+      page grid, so both strategies share one set of baselines: headers, field
+      stacks, sequences and submit actions line up however many fields each one
+      carries.
+    */
     <form
-      className="space-y-5 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
+      className="panel grid gap-6 p-6 lg:row-span-4 lg:grid-rows-subgrid"
       onSubmit={(event) => {
         event.preventDefault();
         if (!hasError) {
@@ -87,30 +140,44 @@ export function StrategyForm({
       }}
     >
       <header>
-        <h2 className="text-sm font-medium text-zinc-100">{title}</h2>
-        <p className="mt-1 text-sm leading-relaxed text-zinc-400">{description}</p>
+        <h2 className="text-xl leading-snug text-say-1">{title}</h2>
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-say-2">
+          {description}
+        </p>
       </header>
 
-      <div className="space-y-3">
+      <div className="space-y-4">
         {fields.map((field, index) => {
           const error = errors[index] ?? null;
           const inputId = `field-${field.key}`;
+          const unit = unitFor(field.kind);
           const bpsPreview =
             field.kind === "bps" && error === null && /^\d+$/.test(field.value.trim())
               ? basisPointsToPercent(Number(field.value))
               : null;
           return (
-            <div key={field.key} className="space-y-1">
-              <label htmlFor={inputId} className="block text-sm text-zinc-400">
-                {field.label}
-                {field.kind === "bps" ? (
-                  <span className="ml-1 text-xs text-zinc-600">(bps)</span>
-                ) : null}
-                {field.kind === "duration" ? (
-                  <span className="ml-1 text-xs text-zinc-600">(seconds)</span>
-                ) : null}
+            <div key={field.key}>
+              <label
+                htmlFor={inputId}
+                className="flex items-baseline justify-between gap-3 text-sm text-say-2"
+              >
+                <span>{field.label}</span>
+                {unit === null ? null : (
+                  <span className="shrink-0 text-xs text-say-3">{unit}</span>
+                )}
               </label>
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2">
+              {/*
+                The field is a raised tonal step with its own lip, not a box
+                drawn with a contrasting hairline. Focus and invalidity are
+                carried by that same edge rather than by an added outline.
+              */}
+              <div
+                className={`panel-raised mt-1.5 flex items-center gap-3 px-3.5 py-2.5 transition-shadow duration-150 ${
+                  error === null
+                    ? "focus-within:shadow-[inset_0_0_0_2px_var(--color-cu)]"
+                    : "shadow-[inset_0_0_0_1px_var(--color-loss)]"
+                }`}
+              >
                 <input
                   id={inputId}
                   name={inputId}
@@ -129,20 +196,22 @@ export function StrategyForm({
                   }}
                   aria-invalid={error !== null}
                   aria-describedby={error === null ? undefined : `${inputId}-error`}
-                  className="w-full bg-transparent font-mono text-sm tabular-nums text-zinc-100 outline-none placeholder:text-zinc-700"
+                  className="num w-full min-w-0 bg-transparent text-[15px] text-say-1 outline-none placeholder:text-say-3"
                 />
                 {bpsPreview === null ? null : (
-                  <span className="shrink-0 font-mono text-xs tabular-nums text-zinc-500">
-                    {bpsPreview}
-                  </span>
+                  <span className="num shrink-0 text-xs text-say-3">{bpsPreview}</span>
                 )}
               </div>
               {error === null ? (
                 field.hint === undefined ? null : (
-                  <p className="text-xs text-zinc-600">{field.hint}</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-say-3">{field.hint}</p>
                 )
               ) : (
-                <p id={`${inputId}-error`} role="alert" className="text-xs text-red-400">
+                <p
+                  id={`${inputId}-error`}
+                  role="alert"
+                  className="mt-1.5 text-xs leading-relaxed text-loss"
+                >
                   {error}
                 </p>
               )}
@@ -151,41 +220,56 @@ export function StrategyForm({
         })}
       </div>
 
-      <div>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Steps
-        </h3>
-        <ol className="space-y-2">
+      <section>
+        <div className="flex items-baseline justify-between gap-4">
+          <h3 className="text-[15px] text-say-1">Steps</h3>
+          <p className="text-xs text-say-3">
+            <span className="num">{completed}</span> of{" "}
+            <span className="num">{steps.length}</span> done
+          </p>
+        </div>
+        <ol className="panel-raised mt-3 divide-y divide-[rgba(255,238,222,0.05)]">
           {steps.map((step, index) => (
-            <li key={step.label} className="flex items-start gap-3">
+            <li key={step.label} className="flex items-baseline gap-3 px-4 py-3">
               <span
                 aria-hidden="true"
-                className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-medium ${STEP_TONE[step.status]}`}
+                className={`num w-4 shrink-0 text-right text-xs ${STEP_INDEX_TONE[step.status]}`}
               >
                 {index + 1}
               </span>
-              <span className="text-sm">
-                <span className="text-zinc-200">{step.label}</span>
-                <span className="sr-only"> — {step.status}</span>
+              <span className="min-w-0 flex-1">
+                <span className={`text-sm ${STEP_LABEL_TONE[step.status]}`}>
+                  {step.label}
+                </span>
+                <span className="sr-only">, {STEP_STATUS_LABEL[step.status]}</span>
                 {step.note === undefined ? null : (
-                  <span className="block text-xs text-zinc-500">{step.note}</span>
+                  <span className="mt-1 block text-xs leading-relaxed text-say-3">
+                    {step.note}
+                  </span>
                 )}
+              </span>
+              <span
+                aria-hidden="true"
+                className={`shrink-0 text-xs ${STEP_STATUS_TONE[step.status]}`}
+              >
+                {STEP_WORD[step.status]}
               </span>
             </li>
           ))}
         </ol>
+      </section>
+
+      <div className="self-end">
+        {footer === undefined ? null : <div className="mb-4">{footer}</div>}
+        <Action
+          type="submit"
+          disabled={disabled || hasError}
+          busy={busy}
+          className="w-full"
+        >
+          {submitLabel}
+        </Action>
       </div>
-
-      {footer}
-
-      <button
-        type="submit"
-        disabled={disabled || hasError}
-        aria-busy={busy}
-        className="w-full rounded-lg bg-teal-500 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        {submitLabel}
-      </button>
     </form>
   );
 }

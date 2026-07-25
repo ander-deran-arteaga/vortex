@@ -28,15 +28,22 @@
   /* Ink on those surfaces. */
   --color-say-1: #f4efe9;
   --color-say-2: #a79e95;
-  --color-say-3: #6d645c;
+  /* 5.06:1 on a panel. The previous #6d645c measured 3.25 and was carrying
+     real values, not just decoration. */
+  --color-say-3: #8d8379;
 
   /* The one accent. Desaturated copper; a tint, not a highlighter. */
   --color-cu: #c8794a;
   --color-cu-dim: #8a5433;
+  /* The hover step, tokenised so the primary action and its link twin cannot
+     drift apart. */
+  --color-cu-hi: #d98a5b;
 
   /* Money has direction, so it gets two tones, both warm-adjacent. */
   --color-gain: #83a06d;
-  --color-loss: #b5574a;
+  /* 6.08:1. Errors and reverts are the text a user most needs to read, so the
+     old #b5574a at 3.96 was exactly the wrong place to be dim. */
+  --color-loss: #d9776a;
   --color-warn: #c2913f;
 
   --font-display: var(--font-sentient), Georgia, serif;
@@ -146,25 +153,5 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
-  }
-
-  /*
-    Motion is authored and short. Nothing on this page is hidden waiting for an
-    animation: these only ever run on elements already on screen, and they
-    animate transform, never opacity from zero.
-  */
-  @media (prefers-reduced-motion: no-preference) {
-    .tick-in {
-      animation: tick-in 240ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
-    }
-  }
-
-  @keyframes tick-in {
-    from {
-      transform: translateY(3px);
-    }
-    to {
-      transform: none;
-    }
   }
 }

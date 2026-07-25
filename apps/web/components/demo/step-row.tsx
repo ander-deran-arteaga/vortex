@@ -1,4 +1,5 @@
 import { SourceBadge } from "@/components/source-badge";
+import { StatusMark } from "@/components/ui/primitives";
 import { formatTokenAmount, truncateAddress } from "@/lib/format";
 import type { DemoStepState, DemoStepStatus } from "@/lib/demo/demoMachine";
 
@@ -11,24 +12,31 @@ const STATUS_LABEL: Record<DemoStepStatus, string> = {
   skipped: "Skipped",
 };
 
-const STATUS_TONE: Record<DemoStepStatus, string> = {
-  not_started: "border-zinc-700 bg-zinc-800/40 text-zinc-500",
-  running: "border-teal-500/50 bg-teal-500/10 text-teal-300",
-  success: "border-teal-500/50 bg-teal-500/20 text-teal-200",
-  failure: "border-red-500/50 bg-red-500/10 text-red-300",
-  blocked: "border-amber-500/40 bg-amber-500/10 text-amber-300",
-  skipped: "border-zinc-700 bg-zinc-800/40 text-zinc-500",
+/**
+ * `blocked` and `failure` are deliberately different colours as well as
+ * different words: a missing capability must never read as a bug, and a bug
+ * must never read as a missing capability.
+ */
+const STATUS_MARK: Record<DemoStepStatus, "gain" | "loss" | "warn" | "muted" | "accent"> =
+  {
+    not_started: "muted",
+    running: "accent",
+    success: "gain",
+    failure: "loss",
+    blocked: "warn",
+    skipped: "muted",
+  };
+
+const STATUS_INK: Record<DemoStepStatus, string> = {
+  not_started: "text-say-3",
+  running: "text-cu",
+  success: "text-gain",
+  failure: "text-loss",
+  blocked: "text-warn",
+  skipped: "text-say-3",
 };
 
-const DOT_TONE: Record<DemoStepStatus, string> = {
-  not_started: "bg-zinc-700",
-  running: "bg-teal-400 animate-pulse",
-  success: "bg-teal-400",
-  failure: "bg-red-400",
-  blocked: "bg-amber-400",
-  skipped: "bg-zinc-700",
-};
-
+/** Money moved, shown as the pair it actually is plus the signed change. */
 function DeltaRow({
   label,
   symbol,
@@ -45,22 +53,18 @@ function DeltaRow({
   const change = after - before;
   const sign = change > 0n ? "+" : change < 0n ? "−" : "";
   const magnitude = change < 0n ? -change : change;
+  const tone = change > 0n ? "text-gain" : change < 0n ? "text-loss" : "text-say-3";
+
   return (
-    <div className="flex flex-wrap items-baseline justify-between gap-2 py-1">
-      <span className="text-xs text-zinc-500">{label}</span>
-      <span className="font-mono text-xs tabular-nums text-zinc-300">
-        {formatTokenAmount(before, decimals)} → {formatTokenAmount(after, decimals)}{" "}
-        <span
-          className={
-            change > 0n
-              ? "text-teal-400"
-              : change < 0n
-                ? "text-red-400"
-                : "text-zinc-500"
-          }
-        >
-          ({sign}
-          {formatTokenAmount(magnitude, decimals)} {symbol})
+    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2">
+      <span className="text-xs text-say-2">{label}</span>
+      <span className="num text-[13px]">
+        <span className="text-say-3">{formatTokenAmount(before, decimals)}</span>
+        <span className="px-1.5 text-say-3">→</span>
+        <span className="text-say-1">{formatTokenAmount(after, decimals)}</span>
+        <span className={`ml-2.5 ${tone}`}>
+          {sign}
+          {formatTokenAmount(magnitude, decimals)} {symbol}
         </span>
       </span>
     </div>
@@ -78,49 +82,57 @@ export function StepRow({
   description: string;
   step: DemoStepState;
 }) {
-  return (
-    <li className="flex gap-4">
-      <div className="flex flex-col items-center">
-        <span
-          aria-hidden="true"
-          className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${DOT_TONE[step.status]}`}
-        />
-        <span aria-hidden="true" className="mt-1 w-px flex-1 bg-zinc-800" />
-      </div>
+  const hasEvidence =
+    step.txHash !== undefined || step.uniswapRequestId !== undefined;
 
-      <div className="flex-1 pb-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-zinc-100">
-            <span className="mr-2 font-mono text-xs tabular-nums text-zinc-600">
-              {String(index + 1).padStart(2, "0")}
-            </span>
-            {title}
-          </h3>
-          <div className="flex items-center gap-2">
+  return (
+    <li className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3 py-5 first:pt-0 last:pb-0 sm:grid-cols-[2.25rem_minmax(0,1fr)] sm:gap-x-4">
+      {/* The ordinal is real data, so it is the only mono thing in the header. */}
+      <span aria-hidden="true" className="num pt-px text-sm text-say-3">
+        {String(index + 1).padStart(2, "0")}
+      </span>
+
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
+          <h3 className="text-[15px] text-say-1">{title}</h3>
+          <span className="flex shrink-0 items-center gap-3">
             {step.source === undefined ? null : <SourceBadge source={step.source} />}
             <span
-              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${STATUS_TONE[step.status]}`}
+              className={`inline-flex items-center gap-1.5 text-xs ${STATUS_INK[step.status]}`}
             >
+              <StatusMark tone={STATUS_MARK[step.status]} />
               {STATUS_LABEL[step.status]}
             </span>
-          </div>
+          </span>
         </div>
 
-        <p className="mt-1 text-sm leading-relaxed text-zinc-400">{description}</p>
+        {/* Prose is capped so a full-width panel never sets a 900px measure. */}
+        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-say-2">
+          {description}
+        </p>
 
         {step.detail === undefined ? null : (
-          <p className="mt-2 text-sm text-zinc-300">{step.detail}</p>
+          <p className="mt-2.5 max-w-3xl text-sm leading-relaxed text-say-1">
+            {step.detail}
+          </p>
         )}
 
+        {/*
+          The reason is quoted exactly as the API gave it, error code and all.
+          Only the prefix is tinted, so the verbatim text stays legible.
+        */}
         {step.reason === undefined ? null : (
           <p
-            className={`mt-2 rounded-lg border px-3 py-2 text-sm ${
-              step.status === "failure"
-                ? "border-red-500/40 bg-red-500/10 text-red-200"
-                : "border-amber-500/40 bg-amber-500/10 text-amber-200"
-            }`}
+            role={step.status === "failure" ? "alert" : undefined}
+            className="panel-raised mt-3 max-w-3xl px-3.5 py-3 text-sm leading-relaxed text-say-1"
           >
-            <span className="font-medium">
+            <span
+              className={
+                step.status === "failure"
+                  ? "font-medium text-loss"
+                  : "font-medium text-warn"
+              }
+            >
               {step.status === "failure" ? "Failure: " : "Blocked: "}
             </span>
             {step.reason}
@@ -128,38 +140,51 @@ export function StepRow({
         )}
 
         {step.deltas === undefined || step.deltas.length === 0 ? null : (
-          <div className="mt-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-            <p className="mb-1 text-xs font-medium uppercase tracking-widest text-zinc-600">
-              Balance change
-            </p>
-            {step.deltas.map((delta) => (
-              <DeltaRow key={delta.label} {...delta} />
-            ))}
+          <div className="panel-raised mt-3 max-w-3xl px-3.5 py-2.5">
+            <p className="text-xs text-say-3">Balance change</p>
+            <div className="mt-0.5 divide-y divide-[rgba(255,238,222,0.05)]">
+              {step.deltas.map((delta) => (
+                <DeltaRow key={delta.label} {...delta} />
+              ))}
+            </div>
           </div>
         )}
 
-        <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-1">
-          <div className="flex items-baseline gap-2">
-            <dt className="text-xs text-zinc-600">Transaction</dt>
-            <dd className="font-mono text-xs tabular-nums text-zinc-400">
-              {step.txHash === undefined ? (
-                "—"
-              ) : (
-                <span title={step.txHash}>{truncateAddress(step.txHash)}</span>
-              )}
-            </dd>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <dt className="text-xs text-zinc-600">Uniswap request ID</dt>
-            <dd className="font-mono text-xs tabular-nums text-zinc-400">
-              {step.uniswapRequestId === undefined ? (
-                "—"
-              ) : (
-                <span title={step.uniswapRequestId}>{step.uniswapRequestId}</span>
-              )}
-            </dd>
-          </div>
-        </dl>
+        {/*
+          Only shown once the step actually produced something. An empty pair of
+          placeholders on eight untouched steps is noise, not evidence.
+        */}
+        {hasEvidence ? (
+          <dl className="mt-3 flex flex-wrap gap-x-8 gap-y-3">
+            <div className="min-w-0">
+              <dt className="text-xs text-say-3">Transaction</dt>
+              <dd className="mt-1 text-xs">
+                {step.txHash === undefined ? (
+                  <span className="text-say-3">Not captured</span>
+                ) : (
+                  <span className="num text-say-1" title={step.txHash}>
+                    {truncateAddress(step.txHash)}
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="text-xs text-say-3">Uniswap request ID</dt>
+              <dd className="mt-1 text-xs">
+                {step.uniswapRequestId === undefined ? (
+                  <span className="text-say-3">Not captured</span>
+                ) : (
+                  <span
+                    className="num break-all text-say-1"
+                    title={step.uniswapRequestId}
+                  >
+                    {step.uniswapRequestId}
+                  </span>
+                )}
+              </dd>
+            </div>
+          </dl>
+        ) : null}
       </div>
     </li>
   );

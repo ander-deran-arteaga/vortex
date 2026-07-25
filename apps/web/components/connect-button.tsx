@@ -3,11 +3,17 @@
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { Action, StatusMark } from "@/components/ui/primitives";
 import { truncateAddress } from "@/lib/format";
 
-const BASE =
-  "shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors";
-
+/**
+ * The wallet control, in the nav's own language.
+ *
+ * Disconnected it is the primary `Action`: copper, chamfered, the one thing in
+ * the bar you can press. Connected it stops being a button-shaped object and
+ * becomes a readout: the address in data type over the network it is on, quiet
+ * until you hover it to disconnect. No bordered pill either way.
+ */
 export function ConnectButton() {
   // Hydration safety: wallet state differs between server and client, so we
   // render a neutral placeholder until after the first client mount.
@@ -22,47 +28,51 @@ export function ConnectButton() {
 
   if (!mounted) {
     return (
-      <button
-        type="button"
-        disabled
-        className={`${BASE} border border-zinc-800 text-zinc-400`}
-      >
+      <Action disabled className="shrink-0">
         Connect
-      </button>
+      </Action>
     );
   }
 
   if (isConnected && address) {
     // `chain` is undefined when the wallet is on a chain outside our config
-    // (anything other than Arbitrum One or the local fork).
+    // (anything other than Arbitrum One or the local fork). That is a real
+    // warning, so it is stated in words and in the warn tone, not colour alone.
     return (
       <button
         type="button"
         onClick={() => disconnect()}
         title="Disconnect"
         aria-label={`Disconnect ${truncateAddress(address)}`}
-        className={
-          chain
-            ? `${BASE} border border-teal-500/30 bg-teal-500/10 text-teal-400 hover:border-teal-500/60`
-            : `${BASE} border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:border-amber-500/70`
-        }
+        className="group flex shrink-0 items-center gap-2.5 text-left"
       >
-        <span className="font-mono tabular-nums">{truncateAddress(address)}</span>
-        <span className="ml-2 text-xs opacity-80">
-          {chain ? chain.name : "Unsupported chain"}
+        <StatusMark tone={chain ? "gain" : "warn"} />
+        <span className="flex flex-col items-start leading-tight">
+          <span className="num text-[13px] text-say-1 transition-colors duration-150 group-hover:text-cu">
+            {truncateAddress(address)}
+          </span>
+          <span
+            className={
+              chain
+                ? "text-[11px] text-say-3 transition-colors duration-150 group-hover:text-say-2"
+                : "text-[11px] text-warn"
+            }
+          >
+            {chain ? chain.name : "Unsupported chain"}
+          </span>
         </span>
       </button>
     );
   }
 
   return (
-    <button
-      type="button"
+    <Action
       onClick={() => connect({ connector: injected() })}
       disabled={isPending}
-      className={`${BASE} bg-teal-500 text-zinc-950 hover:bg-teal-400 disabled:opacity-60`}
+      busy={isPending}
+      className="shrink-0"
     >
       {isPending ? "Connecting…" : "Connect"}
-    </button>
+    </Action>
   );
 }

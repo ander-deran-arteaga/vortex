@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createElement } from "react";
+import { createElement, type FunctionComponent } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetWallet, setWallet, wagmiMock } from "../wallet/mock-wagmi";
 import {
@@ -180,7 +180,9 @@ function liveQuoteBody() {
 async function quoteOnce() {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const { SwapClient } = await import("@/components/swap/swap-client");
-  render(createElement(SwapClient));
+  // This file is .ts, so the page is constructed rather than written as JSX.
+  const Page: FunctionComponent = SwapClient;
+  render(createElement(Page));
 
   await user.type(screen.getByLabelText("Sell"), "1");
   await user.click(screen.getByRole("button", { name: /get best execution/i }));

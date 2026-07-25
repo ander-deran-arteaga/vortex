@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
+import { PageHead } from "@/components/ui/primitives";
 
+/**
+ * Legacy shim. Pages predating the design system call this; it now defers to
+ * the `PageHead` primitive so every page opens with the same type and rhythm.
+ *
+ * `overline` is accepted so existing call sites keep compiling, but it is not
+ * rendered: the system does not open a page with a small tracked-out label
+ * above the heading.
+ */
 type PageHeaderProps = {
   overline?: string;
   title: string;
@@ -7,19 +16,6 @@ type PageHeaderProps = {
   badge?: ReactNode;
 };
 
-export function PageHeader({ overline, title, description, badge }: PageHeaderProps) {
-  return (
-    <header className="flex flex-col gap-3">
-      {overline ? (
-        <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">{overline}</p>
-      ) : null}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">{title}</h1>
-        {badge}
-      </div>
-      {description ? (
-        <p className="max-w-2xl text-sm leading-relaxed text-zinc-400">{description}</p>
-      ) : null}
-    </header>
-  );
+export function PageHeader({ title, description, badge }: PageHeaderProps) {
+  return <PageHead title={title} lead={description} aside={badge} />;
 }

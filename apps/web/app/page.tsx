@@ -1,29 +1,55 @@
 import Link from "next/link";
+import { Page, Panel, Row, Rows, StatusMark } from "@/components/ui/primitives";
 
-interface ProductCard {
+/**
+ * The overview.
+ *
+ * The opening is a composition rather than a stack: one statement takes the
+ * measure, the readout is placed beside it and pinned to the same bottom line
+ * as the actions. The three products then align on a shared grid so titles,
+ * bodies and status all sit on the same lines whatever the copy length.
+ *
+ * Nothing here fetches. Values that are not yet known render as an em dash in
+ * `.num`, because an unknown reading is still data.
+ */
+
+interface Product {
   name: string;
-  badge: string;
+  role: string;
   body: string;
+  /** Null while the product has no page to open. */
+  href: string | null;
+  status: string;
+  tone: "gain" | "muted";
 }
 
-const PRODUCTS: readonly ProductCard[] = [
+const PRODUCTS: readonly Product[] = [
   {
     name: "Vortex Swap",
-    badge: "Interface live · fixture data",
+    role: "Best execution",
+    href: "/swap",
     body:
-      "Best execution for exact-input WBTC/USDC trades. Inventory-aware quotes from a 1inch Aqua SwapVM market-making strategy compete against Uniswap Trading API quotes on every request. A trade routes through Aqua only when Aqua's net output wins; otherwise it executes the exact Uniswap API-built transaction.",
+      "Exact-input WBTC/USDC trades. An inventory-aware 1inch Aqua SwapVM strategy quotes against the Uniswap Trading API on every request, and a trade routes through Aqua only when Aqua's net output wins. Otherwise it executes the exact Uniswap API-built transaction.",
+    status: "Interface live",
+    tone: "gain",
   },
   {
     name: "Vortex Grow",
-    badge: "Interface live · fixture data",
+    role: "Same-asset compounding",
+    href: "/grow",
     body:
-      "Same-asset compounding — Grow WBTC. A custom Aqua app temporarily pulls maker WBTC and runs an atomic cycle across the Vortex PermAMM and an external Uniswap API route. The cycle succeeds only if final WBTC exceeds initial WBTC, takes a performance fee only from realized profit, then pushes principal plus profit back to the maker.",
+      "Compounding that never leaves WBTC. A custom Aqua app temporarily pulls maker WBTC and runs one atomic cycle across the Vortex PermAMM and an external Uniswap API route. It settles only if final WBTC exceeds initial WBTC, and the performance fee comes from realized profit alone.",
+    status: "Interface live",
+    tone: "gain",
   },
   {
     name: "Vortex PermAMM",
-    badge: "Awaiting Phase 5",
+    role: "Dynamic-fee v4 pool",
+    href: null,
     body:
-      "A real Uniswap v4 dynamic-fee pool and hook with a mock reference oracle, an immutable safety-fee floor, and signed per-swap commercial fees. It is one leg of the Grow cycle and the venue where maker-side pricing policy lives on-chain.",
+      "A real Uniswap v4 dynamic-fee pool and hook with a mock reference oracle, an immutable safety-fee floor, and signed per-swap commercial fees. It is one leg of the Grow cycle and the venue where maker-side pricing policy lives onchain.",
+    status: "Awaiting Phase 5",
+    tone: "muted",
   },
 ];
 
@@ -48,155 +74,171 @@ const PHASES: readonly string[] = [
 
 const CURRENT_PHASE = 4;
 
-function PhasePill({ children }: { children: string }) {
+/** The primary action, as a link. Same silhouette and warmth as `Action`. */
+function ActionLink({ href, children }: { href: string; children: string }) {
   return (
-    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-0.5 text-xs text-zinc-400">
+    <Link
+      href={href}
+      className="cut-tr inline-flex items-center bg-cu px-5 py-2.5 pr-6 text-sm font-medium text-ink-0 transition-colors duration-150 hover:bg-[#d98a5b]"
+    >
       {children}
-    </span>
+    </Link>
+  );
+}
+
+/** The quiet counterpart. A text action, never an outlined twin of the above. */
+function QuietLink({ href, children }: { href: string; children: string }) {
+  return (
+    <Link
+      href={href}
+      className="text-sm text-say-2 underline-offset-4 transition-colors duration-150 hover:text-cu"
+    >
+      {children}
+    </Link>
   );
 }
 
 export default function HomePage() {
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-16">
-      {/* Hero */}
-      <section className="max-w-3xl">
-        <p className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Programmable market-making
-        </p>
-        <h1 className="mt-3 text-5xl font-semibold tracking-tight text-zinc-100">
-          Vortex
-        </h1>
-        <p className="mt-5 text-lg leading-relaxed text-zinc-400">
-          One WBTC/USDC maker inventory on Arbitrum One powers three
-          coordinated execution products: best-execution swaps that pit
-          Aqua-based quotes against the Uniswap Trading API, same-asset
-          compounding that grows maker WBTC through atomic profit-only cycles,
-          and a Uniswap v4 dynamic-fee pool that puts maker pricing policy
-          on-chain — all drawing from the same programmable liquidity.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-3">
-          <Link
-            href="/swap"
-            className="rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-medium text-zinc-950 transition-colors hover:bg-teal-400"
-          >
-            Get best execution
-          </Link>
-          <Link
-            href="/architecture"
-            className="rounded-lg border border-zinc-800 px-5 py-2.5 text-sm font-medium text-zinc-100 transition-colors hover:border-zinc-700"
-          >
-            How it works
-          </Link>
+    <Page>
+      {/*
+        The opening. The statement owns the full measure of its column; the
+        readout sits in the last four columns and is bottom-aligned with the
+        actions, so the two blocks share a real line instead of floating.
+      */}
+      <section className="grid gap-x-8 gap-y-12 sm:pt-6 lg:grid-cols-12">
+        <div className="lg:col-span-8">
+          <h1 className="text-[clamp(1.75rem,5.2vw,4.25rem)] leading-[1.05] tracking-[-0.02em] text-say-1">
+            <span className="block">One maker inventory.</span>
+            <span className="block text-say-2">Three ways to execute.</span>
+          </h1>
+
+          <p className="mt-8 max-w-xl text-[17px] leading-relaxed text-say-2">
+            Vortex runs one WBTC/USDC maker book on Arbitrum One. Every quote is
+            contested: an inventory-aware Aqua SwapVM strategy against the
+            Uniswap Trading API, decided on net output after gas.
+          </p>
+
+          <div className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-4">
+            <ActionLink href="/swap">Get best execution</ActionLink>
+            <QuietLink href="/architecture">How it works</QuietLink>
+          </div>
         </div>
+
+        {/* The one chamfered panel on this page. Its header is padded clear of the cut. */}
+        <Panel title="System status" cut className="lg:col-span-4 lg:self-end">
+          <Rows>
+            <div className="flex items-baseline justify-between gap-4 py-2">
+              <dt className="text-sm text-say-2">Web</dt>
+              <dd className="flex items-center gap-2 text-sm text-gain">
+                <StatusMark tone="gain" />
+                Online
+              </dd>
+            </div>
+            {STATUS_ROWS.map((row) => (
+              <Row
+                key={row.label}
+                label={row.label}
+                hint={`Awaiting Phase ${row.phase}`}
+                value="—"
+                tone="muted"
+              />
+            ))}
+          </Rows>
+        </Panel>
       </section>
 
-      {/* Product cards */}
-      <section className="mt-16">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Three products, one inventory
-        </h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
+      {/*
+        Three parallel cards. Grid stretch equalises their heights and the body
+        takes the slack, so every title, role line and status sits on the same
+        line across all three columns however long the copy runs.
+      */}
+      <section className="mt-24">
+        <h2 className="text-2xl text-say-1">Three products, one inventory</h2>
+
+        <div className="mt-10 grid gap-4 md:grid-cols-3">
           {PRODUCTS.map((product) => (
-            <article
-              key={product.name}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-lg font-semibold text-teal-400">
-                  {product.name}
-                </h3>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+            <article key={product.name} className="panel flex flex-col p-6">
+              <h3 className="text-xl text-say-1">
+                {product.href === null ? (
+                  product.name
+                ) : (
+                  <Link
+                    href={product.href}
+                    className="transition-colors duration-150 hover:text-cu"
+                  >
+                    {product.name}
+                  </Link>
+                )}
+              </h3>
+              <p className="mt-1.5 text-sm text-cu">{product.role}</p>
+              <p className="mt-5 flex-1 text-sm leading-relaxed text-say-2">
                 {product.body}
               </p>
-              <div className="mt-4">
-                <PhasePill>{product.badge}</PhasePill>
-              </div>
+              <p className="mt-7 flex items-center gap-2 text-[13px] text-say-2">
+                <StatusMark tone={product.tone} />
+                {product.status}
+              </p>
             </article>
           ))}
         </div>
+
+        <p className="mt-6 max-w-2xl text-sm leading-relaxed text-say-2">
+          Live quotes need the Vortex API. When it is not reachable, Vortex Swap
+          and Vortex Grow fall back to deterministic fixtures and label every
+          value on screen as fixture data.
+        </p>
       </section>
 
-      {/* System status */}
-      <section className="mt-16">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          System status
-        </h2>
-        <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-          <ul className="divide-y divide-zinc-800">
-            <li className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-              <span className="text-sm text-zinc-100">Web</span>
-              <span className="flex items-center gap-2 text-sm text-teal-400">
-                <span
-                  className="h-1.5 w-1.5 rounded-full bg-teal-400"
-                  aria-hidden="true"
-                />
-                online
-              </span>
-            </li>
-            {STATUS_ROWS.map((row) => (
+      {/* Build progress: a sequence in type. It wraps rather than scrolling sideways. */}
+      <section className="mt-24">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+          <h2 className="text-2xl text-say-1">Build progress</h2>
+          <p className="text-sm text-say-2">
+            Now on phase <span className="num text-say-1">{CURRENT_PHASE}</span>
+            {": "}
+            {PHASES[CURRENT_PHASE]}
+          </p>
+        </div>
+
+        <ol className="mt-8 grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-9">
+          {PHASES.map((label, index) => {
+            const current = index === CURRENT_PHASE;
+            const done = index < CURRENT_PHASE;
+            return (
               <li
-                key={row.label}
-                className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                key={label}
+                aria-current={current ? "step" : undefined}
+                className="min-w-0"
               >
-                <span className="text-sm text-zinc-100">{row.label}</span>
-                <span className="flex items-center gap-3">
-                  <span className="font-mono tabular-nums text-sm text-zinc-500">
-                    —
+                {/*
+                  Progress reads through a mark, not through a contrast drop:
+                  shipped phases carry the diamond, the current one is copper
+                  and says so, and nothing is dimmed below legibility.
+                */}
+                <p className="flex h-4 items-center gap-2 text-xs">
+                  <span className="sr-only">Phase </span>
+                  <span className={`num ${current ? "text-cu" : "text-say-3"}`}>
+                    {index}
                   </span>
-                  <PhasePill>{`Awaiting Phase ${row.phase}`}</PhasePill>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      {/* Build progress */}
-      <section className="mt-16">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Build progress
-        </h2>
-        <div className="mt-4 overflow-x-auto pb-2">
-          <ol className="flex min-w-max gap-2">
-            {PHASES.map((label, index) => {
-              const current = index === CURRENT_PHASE;
-              return (
-                <li
-                  key={label}
-                  aria-current={current ? "step" : undefined}
-                  className={
-                    current
-                      ? "w-32 shrink-0 rounded-lg border border-teal-500/30 bg-teal-500/10 px-3 py-2.5"
-                      : "w-32 shrink-0 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2.5"
-                  }
+                  {current ? (
+                    <span className="text-cu">Now</span>
+                  ) : done ? (
+                    <StatusMark tone="gain" />
+                  ) : null}
+                </p>
+                <p
+                  className={`mt-2 text-sm leading-snug ${
+                    current ? "font-medium text-say-1" : "text-say-2"
+                  }`}
                 >
-                  <p
-                    className={
-                      current
-                        ? "font-mono text-xs tabular-nums text-teal-400"
-                        : "font-mono text-xs tabular-nums text-zinc-500"
-                    }
-                  >
-                    Phase {index}
-                    {current ? " · now" : ""}
-                  </p>
-                  <p
-                    className={
-                      current
-                        ? "mt-1 text-xs font-medium text-zinc-100"
-                        : "mt-1 text-xs text-zinc-400"
-                    }
-                  >
-                    {label}
-                  </p>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+                  {label}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
       </section>
-    </div>
+    </Page>
   );
 }

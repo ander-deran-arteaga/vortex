@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useAccount, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { USDC, WBTC } from "@vortex/shared";
 import { CoveragePanel } from "@/components/maker/coverage-panel";
@@ -9,8 +9,8 @@ import {
   type StrategyField,
   type StrategyStep,
 } from "@/components/maker/strategy-form";
-import { PageHeader } from "@/components/page-header";
 import { FixtureNotice } from "@/components/source-badge";
+import { Action, Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
 import { useStrategyHealth } from "@/hooks/useVortexQueries";
 import { ApiRequestError } from "@/lib/api";
 import { ERC20_APPROVE_ABI, asEvmAddress } from "@/lib/erc20";
@@ -19,7 +19,7 @@ import { STRATEGY_HASHES } from "@/lib/strategy-config";
 
 const SUPPORTED_CHAIN_IDS = [42161, 31337];
 /** Aqua is not deployed from the UI; approvals target the address the API reports. */
-const SHIP_BLOCKED_NOTE = "Requires the Aqua strategy contracts — Phase 2/6";
+const SHIP_BLOCKED_NOTE = "Requires the Aqua strategy contracts, Phase 2/6";
 
 /** The API's own code in front of its message (STRATEGY_NOT_FOUND, …). */
 function describeError(error: unknown): string {
@@ -27,6 +27,47 @@ function describeError(error: unknown): string {
     return `${error.code}: ${error.message}`;
   }
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+/**
+ * Every page-level condition wears the same shape: a status mark, a sentence
+ * that says what is true, and the action that resolves it if there is one.
+ */
+function Notice({
+  tone,
+  lead,
+  children,
+  role,
+}: {
+  tone: "gain" | "loss" | "warn" | "muted" | "accent";
+  lead?: string;
+  children: ReactNode;
+  role?: "alert";
+}) {
+  const leadTone =
+    tone === "loss" ? "text-loss" : tone === "warn" ? "text-warn" : "text-say-1";
+  return (
+    <div role={role} className="panel-raised flex gap-3 p-4">
+      <StatusMark tone={tone} className="mt-[7px] shrink-0" />
+      <div className="min-w-0 flex-1 text-sm leading-relaxed text-say-2">
+        {lead === undefined ? null : <span className={leadTone}>{lead} </span>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** No numbers yet, so none are shown: the panel says what it is waiting for. */
+function CoveragePending({ title }: { title: string }) {
+  return (
+    <Panel title={title} aside={<span className="text-xs text-say-3">Reading…</span>}>
+      <p className="max-w-prose text-sm leading-relaxed text-say-2">
+        Reading virtual balances, wallet balances and Aqua allowances for this
+        strategy. Nothing is shown until the API answers, because a coverage
+        figure guessed from stale state is worse than none.
+      </p>
+    </Panel>
+  );
 }
 
 function useApproval() {
@@ -103,11 +144,11 @@ export function MakerClient() {
     { key: "usdc", label: "USDC allocated", kind: "amount", decimals: USDC.decimals, value: swapForm.usdc, onChange: setSwapField("usdc") },
     { key: "targetWeight", label: "Target weight", kind: "bps", value: swapForm.targetWeight, onChange: setSwapField("targetWeight"), hint: "Share of inventory the strategy steers toward." },
     { key: "maxTrade", label: "Maximum trade", kind: "amount", decimals: WBTC.decimals, value: swapForm.maxTrade, onChange: setSwapField("maxTrade") },
-    { key: "safetyFee", label: "Safety fee floor", kind: "bps", value: swapForm.safetyFee, onChange: setSwapField("safetyFee"), hint: "Immutable floor — quotes never price below it." },
+    { key: "safetyFee", label: "Safety fee floor", kind: "bps", value: swapForm.safetyFee, onChange: setSwapField("safetyFee"), hint: "Immutable floor: quotes never price below it." },
     { key: "commercialFee", label: "Commercial fee", kind: "bps", value: swapForm.commercialFee, onChange: setSwapField("commercialFee") },
     { key: "inventoryStrength", label: "Inventory strength", kind: "bps", value: swapForm.inventoryStrength, onChange: setSwapField("inventoryStrength"), hint: "How hard pricing pushes back toward the target weight." },
-    { key: "boundLower", label: "Hard weight bound — lower", kind: "bps", value: swapForm.boundLower, onChange: setSwapField("boundLower") },
-    { key: "boundUpper", label: "Hard weight bound — upper", kind: "bps", value: swapForm.boundUpper, onChange: setSwapField("boundUpper") },
+    { key: "boundLower", label: "Hard weight bound, lower", kind: "bps", value: swapForm.boundLower, onChange: setSwapField("boundLower") },
+    { key: "boundUpper", label: "Hard weight bound, upper", kind: "bps", value: swapForm.boundUpper, onChange: setSwapField("boundUpper") },
     { key: "swapExpiry", label: "Strategy expiry", kind: "duration", value: swapForm.expiry, onChange: setSwapField("expiry") },
   ];
 
@@ -174,86 +215,99 @@ export function MakerClient() {
 
   const walletBlocked = !isConnected || wrongChain;
 
+  const approvalFailures: { form: string; message: string }[] = [
+    { form: "Vortex Swap", error: swapApproval.error },
+    { form: "Vortex Grow", error: growApproval.error },
+  ].flatMap(({ form, error }) => (error ? [{ form, message: error.message }] : []));
+
+  const anyFixture =
+    swapHealth.data?.source === "fixture" || growHealth.data?.source === "fixture";
+  const hasNotices =
+    anyFixture ||
+    !isConnected ||
+    wrongChain ||
+    approvalNote !== null ||
+    healthFailures.length > 0 ||
+    approvalFailures.length > 0;
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <PageHeader
-        overline="Maker"
+    <Page>
+      <PageHead
         title="Ship inventory"
-        description="One inventory backs both Vortex products. Configure the market-making strategy and the compounding strategy, approve what Aqua may pull, and watch coverage as the position works."
+        lead="One inventory backs both Vortex products. Configure the market-making strategy and the compounding strategy, approve what Aqua may pull, and watch coverage as the position works."
       />
 
-      {swapHealth.data?.source === "fixture" || growHealth.data?.source === "fixture" ? (
-        <FixtureNotice className="mb-6" />
-      ) : null}
+      {hasNotices ? (
+        <div className="mb-10 space-y-3">
+          {anyFixture ? <FixtureNotice /> : null}
 
-      {!isConnected ? (
-        <p className="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-400">
-          Connect a wallet to approve tokens. You can still review the strategy
-          parameters without one.
-        </p>
-      ) : null}
+          {!isConnected ? (
+            <Notice tone="muted">
+              Connect a wallet to approve tokens. You can still review the
+              strategy parameters without one.
+            </Notice>
+          ) : null}
 
-      {wrongChain ? (
-        <div className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          <p className="mb-2">
-            Your wallet is on an unsupported network. Vortex runs on Arbitrum
-            One and the local Arbitrum fork.
-          </p>
-          <button
-            type="button"
-            onClick={() => switchChain({ chainId: 42161 })}
-            disabled={switchPending}
-            aria-busy={switchPending}
-            className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/10 disabled:opacity-40"
-          >
-            {switchPending ? "Switching…" : "Switch to Arbitrum One"}
-          </button>
+          {wrongChain ? (
+            <Notice tone="warn" lead="Unsupported network.">
+              Vortex runs on Arbitrum One and the local Arbitrum fork. Approvals
+              stay disabled until your wallet is on one of them.
+              <span className="mt-3 block">
+                <Action
+                  onClick={() => switchChain({ chainId: 42161 })}
+                  disabled={switchPending}
+                  busy={switchPending}
+                >
+                  {switchPending ? "Switching…" : "Switch to Arbitrum One"}
+                </Action>
+              </span>
+            </Notice>
+          ) : null}
+
+          {approvalNote === null ? null : (
+            <Notice tone="warn" lead="Nothing to approve yet.">
+              {approvalNote}
+            </Notice>
+          )}
+
+          {healthFailures.length === 0 ? null : (
+            <Notice
+              tone="loss"
+              role="alert"
+              lead="Coverage could not be read, so the panels below are missing rather than empty."
+            >
+              <ul className="mt-2 space-y-1">
+                {healthFailures.map((failure) => (
+                  <li key={failure.label}>
+                    <span className="text-say-1">{failure.label}</span>:{" "}
+                    {failure.message}
+                  </li>
+                ))}
+              </ul>
+            </Notice>
+          )}
+
+          {approvalFailures.map((failure) => (
+            <Notice
+              key={failure.form}
+              tone="loss"
+              role="alert"
+              lead={`${failure.form} approval failed.`}
+            >
+              {failure.message}
+            </Notice>
+          ))}
         </div>
       ) : null}
 
-      {approvalNote === null ? null : (
-        <p className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          {approvalNote}
-        </p>
-      )}
-
-      {healthFailures.length === 0 ? null : (
-        <div
-          role="alert"
-          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
-        >
-          <p className="mb-1 font-medium text-red-300">
-            Coverage could not be read, so the panels below are missing rather
-            than empty.
-          </p>
-          <ul className="list-inside list-disc">
-            {healthFailures.map((failure) => (
-              <li key={failure.label}>
-                {failure.label}: {failure.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {[
-        { form: "Vortex Swap", error: swapApproval.error },
-        { form: "Vortex Grow", error: growApproval.error },
-      ].flatMap(({ form, error }) =>
-        error ? [{ form, message: error.message }] : [],
-      ).map((failure) => (
-        <p
-          key={failure.form}
-          role="alert"
-          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
-        >
-          {failure.form} approval failed: {failure.message}
-        </p>
-      ))}
-
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/*
+        Two strategies, one grid. Each form subgrids the same four rows, so the
+        headers, field stacks, sequences and submit actions share baselines no
+        matter that one strategy carries ten fields and the other five.
+      */}
+      <div className="grid gap-6 lg:grid-cols-2 lg:grid-rows-[auto_auto_1fr_auto]">
         <StrategyForm
-          title="Vortex Swap — WBTC/USDC"
+          title="Vortex Swap · WBTC/USDC"
           description="A two-token market-making position quoted through SwapVM. Pricing leans against inventory: trades that recentre the book get a better price, trades that worsen it pay more."
           fields={swapFields}
           steps={swapSteps}
@@ -266,7 +320,7 @@ export function MakerClient() {
         />
 
         <StrategyForm
-          title="Vortex Grow — WBTC"
+          title="Vortex Grow · WBTC"
           description="A single-asset position. The Grow app may pull WBTC for one atomic cycle and must return more than it took, or the transaction reverts."
           fields={growFields}
           steps={growSteps}
@@ -285,21 +339,29 @@ export function MakerClient() {
       </div>
 
       <div className="mt-6 space-y-6">
-        {swapHealth.data === undefined ? null : (
+        {swapHealth.data === undefined ? (
+          swapHealth.error instanceof Error ? null : (
+            <CoveragePending title="Vortex Swap balance coverage" />
+          )
+        ) : (
           <CoveragePanel
             health={swapHealth.data.data}
             source={swapHealth.data.source}
-            title="Vortex Swap — balance coverage"
+            title="Vortex Swap balance coverage"
           />
         )}
-        {growHealth.data === undefined ? null : (
+        {growHealth.data === undefined ? (
+          growHealth.error instanceof Error ? null : (
+            <CoveragePending title="Vortex Grow balance coverage" />
+          )
+        ) : (
           <CoveragePanel
             health={growHealth.data.data}
             source={growHealth.data.source}
-            title="Vortex Grow — balance coverage"
+            title="Vortex Grow balance coverage"
           />
         )}
       </div>
-    </div>
+    </Page>
   );
 }

@@ -85,6 +85,9 @@ describe("strategy form", () => {
       within(shipStep as HTMLElement).getByText(/Requires the Aqua strategy contracts/),
     ).toBeInTheDocument();
     // Status is conveyed to assistive tech, not by colour alone.
-    expect(within(shipStep as HTMLElement).getByText(/— blocked/)).toBeInTheDocument();
+    // The status must reach assistive tech. The separator changed from an em
+    // dash to a comma when em dashes were removed from UI copy; what is being
+    // asserted is unchanged: the step announces that it is blocked.
+    expect(within(shipStep as HTMLElement).getByText(/, blocked/)).toBeInTheDocument();
   });
 });

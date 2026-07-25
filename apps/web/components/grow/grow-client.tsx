@@ -5,8 +5,17 @@ import { useAccount } from "wagmi";
 import { WBTC } from "@vortex/shared";
 import { OpportunityCard } from "@/components/grow/opportunity-card";
 import { ProfitBreakdown } from "@/components/grow/profit-breakdown";
-import { PageHeader } from "@/components/page-header";
 import { FixtureNotice, SourceBadge } from "@/components/source-badge";
+import {
+  Action,
+  Page,
+  PageHead,
+  QuietAction,
+  Row,
+  Rows,
+  StatusMark,
+} from "@/components/ui/primitives";
+import { VortexMark } from "@/components/ui/vortex-mark";
 import { useGrowExecution, type GrowSettlement } from "@/hooks/useGrowExecution";
 import { useGrowFlow } from "@/hooks/useGrowFlow";
 import { formatTokenAmount, parseTokenAmount, truncateAddress } from "@/lib/format";
@@ -46,42 +55,110 @@ const INVARIANTS = [
   {
     name: "Principal stays accounted for",
     detail:
-      "Principal never leaves custody mid-cycle unreturned — it is pulled and pushed back within the same transaction.",
+      "Principal never leaves custody mid-cycle unreturned: it is pulled and pushed back within the same transaction.",
   },
 ] as const;
 
-function FlowBox({
-  title,
-  detail,
-  accent = false,
-}: {
-  title: string;
-  detail?: string;
+/**
+ * The cycle, as a sequence rather than a stack of boxes joined by arrows. Each
+ * step names the verb that moved value into it, who holds it, and what happens
+ * there — three columns on one grid, so the whole route reads down a line.
+ */
+const CYCLE_STEPS: ReadonlyArray<{
+  edge: string | null;
+  name: string;
+  detail: string;
   accent?: boolean;
+}> = [
+  { edge: null, name: "Aqua maker", detail: "Custodies the WBTC principal" },
+  { edge: "pull", name: "Vortex Grow app", detail: "Orchestrates the atomic cycle" },
+  { edge: "leg 1", name: "Vortex PermAMM", detail: "WBTC → USDC" },
+  {
+    edge: "leg 2",
+    name: "External venue (Uniswap API route)",
+    detail: "USDC → WBTC",
+  },
+  {
+    edge: "check",
+    name: "Profit check",
+    detail: `final WBTC ${">"} initial WBTC or the whole transaction reverts`,
+    accent: true,
+  },
+  { edge: "fee", name: "Performance fee", detail: "Taken from realized profit only" },
+  { edge: "push", name: "Aqua maker", detail: "Principal + profit returned" },
+];
+
+type StepTone = "done" | "active" | "failed" | "pending";
+
+const STEP_SPOKEN: Record<StepTone, string> = {
+  done: "completed",
+  active: "in progress",
+  failed: "failed",
+  pending: "not started",
+};
+
+/**
+ * What is verified complete, in order. A step is only marked done when there is
+ * something on the client that proves it, and a step is only marked failed when
+ * the run could not have failed anywhere else — an ambiguous failure leaves the
+ * remaining steps untouched and lets the error message speak for itself.
+ */
+function ProgressRail({
+  steps,
+}: {
+  steps: ReadonlyArray<{ label: string; tone: StepTone }>;
 }) {
   return (
-    <div
-      className={`w-full max-w-md rounded-lg border px-4 py-3 text-center ${
-        accent ? "border-teal-500/30 bg-teal-500/10" : "border-zinc-800 bg-zinc-900"
-      }`}
-    >
-      <p className="text-sm font-medium text-zinc-100">{title}</p>
-      {detail === undefined ? null : (
-        <p className="mt-0.5 text-xs text-zinc-400">{detail}</p>
-      )}
-    </div>
+    // Sits inside the aria-live status panel; the step marks would otherwise be
+    // re-announced on every tick, over the message that actually matters.
+    <ol aria-live="off" className="space-y-2.5">
+      {steps.map((step) => (
+        <li
+          key={step.label}
+          aria-current={step.tone === "active" ? "step" : undefined}
+          className="flex items-center gap-2.5"
+        >
+          <StatusMark
+            tone={
+              step.tone === "failed"
+                ? "loss"
+                : step.tone === "active"
+                  ? "accent"
+                  : step.tone === "done"
+                    ? "gain"
+                    : "muted"
+            }
+            className={step.tone === "pending" ? "opacity-45" : ""}
+          />
+          <span
+            className={
+              step.tone === "failed"
+                ? "text-sm text-loss"
+                : step.tone === "active"
+                  ? "text-sm font-medium text-say-1"
+                  : step.tone === "done"
+                    ? "text-sm text-say-2"
+                    : "text-sm text-say-3"
+            }
+          >
+            {step.label}
+            <span className="sr-only">, {STEP_SPOKEN[step.tone]}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-function FlowEdge({ label }: { label: string }) {
+/** A caution that is a note, not an error: warn ink, no drawn outline. */
+function CautionNote({ children }: { children: string }) {
   return (
-    <div className="flex flex-col items-center py-1.5">
-      <span className="text-[10px] uppercase tracking-widest text-zinc-600">
-        {label}
-      </span>
-      <span aria-hidden="true" className="text-zinc-700">
-        ↓
-      </span>
+    <div className="panel-raised mt-4 flex gap-3 px-4 py-3">
+      <span
+        aria-hidden="true"
+        className="mt-[7px] inline-block size-[6px] shrink-0 rotate-45 bg-warn"
+      />
+      <p className="text-sm leading-relaxed text-say-2">{children}</p>
     </div>
   );
 }
@@ -90,20 +167,26 @@ function SettlementRow({
   label,
   value,
   mono = true,
-  emphasis = false,
+  tone = "default",
 }: {
   label: string;
   value: string;
   mono?: boolean;
-  emphasis?: boolean;
+  tone?: "default" | "gain" | "loss" | "muted";
 }) {
+  const toneClass =
+    tone === "gain"
+      ? "text-gain"
+      : tone === "loss"
+        ? "text-loss"
+        : tone === "muted"
+          ? "text-say-3"
+          : "text-say-1";
   return (
-    <div className="flex items-baseline justify-between gap-4 py-2">
-      <dt className="shrink-0 text-sm text-zinc-400">{label}</dt>
+    <div className="flex items-baseline justify-between gap-5 py-2.5">
+      <dt className="shrink-0 text-sm text-say-2">{label}</dt>
       <dd
-        className={`${mono ? "font-mono tabular-nums" : ""} break-all text-right text-sm ${
-          emphasis ? "text-teal-300" : "text-zinc-100"
-        }`}
+        className={`${mono ? "num" : ""} break-all text-right text-sm ${toneClass}`}
       >
         {value}
       </dd>
@@ -122,86 +205,109 @@ function SettlementPanel({ settlement }: { settlement: GrowSettlement }) {
   const amount = (value: bigint) => `${formatTokenAmount(value, assetDecimals)} WBTC`;
   const delta = before === null || after === null ? null : after - before;
 
+  const deltaText =
+    delta === null
+      ? "—"
+      : delta > 0n
+        ? `+ ${amount(delta)}`
+        : delta === 0n
+          ? amount(0n)
+          : `− ${amount(-delta)}`;
+  const deltaTone =
+    delta === null
+      ? "text-say-3"
+      : delta > 0n
+        ? "text-gain"
+        : delta < 0n
+          ? "text-loss"
+          : "text-say-1";
+
   return (
-    <section
-      aria-live="polite"
-      className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
-    >
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Settlement
-        </h2>
+    <section aria-live="polite" className="panel">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 px-5 pt-5">
+        <h2 className="text-[15px] text-say-1">Settlement</h2>
         {/* A real receipt is what makes these numbers onchain facts; without
             one there is nothing to label as live. */}
         {settlement.receipt === "unverified" ? null : <SourceBadge source="live" />}
       </header>
 
-      <dl className="divide-y divide-zinc-800/60">
-        <SettlementRow label="Transaction" value={settlement.txHash} />
-        <SettlementRow
-          label="Broadcast by"
-          mono={false}
-          value={
-            settlement.mode === "SOLVER"
-              ? "The Vortex solver (backend key)"
-              : "Your wallet (no solver configured)"
-          }
-        />
-        <SettlementRow
-          label="Receipt"
-          mono={false}
-          value={
-            settlement.receipt === "confirmed"
-              ? "Confirmed onchain"
-              : settlement.receipt === "reverted"
-                ? "Reverted onchain"
-                : "Not verified in this browser"
-          }
-        />
-        <SettlementRow
-          label="Block"
-          value={settlement.blockNumber === null ? "—" : settlement.blockNumber.toString()}
-        />
-        <SettlementRow
-          label="Maker"
-          value={settlement.maker === null ? "—" : truncateAddress(settlement.maker)}
-        />
-        <SettlementRow
-          label="Maker WBTC before"
-          value={before === null ? "—" : amount(before)}
-        />
-        <SettlementRow
-          label="Maker WBTC after"
-          value={after === null ? "—" : amount(after)}
-        />
-        <SettlementRow
-          label="Delta"
-          emphasis
-          value={
-            delta === null
-              ? "—"
-              : delta > 0n
-                ? `+ ${amount(delta)}`
-                : delta === 0n
-                  ? amount(0n)
-                  : `− ${amount(-delta)}`
-          }
-        />
-      </dl>
+      <div className="p-5">
+        {/* The whole point of the cycle, so it is read first and read largest. */}
+        <div className="panel-raised px-5 py-5">
+          <p className="text-sm text-say-2">Maker WBTC delta</p>
+          <p className={`num mt-2 text-[1.6rem] leading-none sm:text-[2rem] ${deltaTone}`}>
+            {deltaText}
+          </p>
+          <p className="mt-3 text-xs leading-relaxed text-say-3">
+            {delta === null
+              ? "No balance could be read for this run, so no delta is claimed."
+              : "Read from the maker's balance either side of the cycle's block."}
+          </p>
+        </div>
 
-      {settlement.balanceNote === null ? (
-        <p className="mt-3 text-xs text-zinc-500">
-          Balances read with <code>balanceOf</code> at blocks{" "}
-          {settlement.blockNumber === null
-            ? "—"
-            : `${(settlement.blockNumber - 1n).toString()} and ${settlement.blockNumber.toString()}`}
-          .
-        </p>
-      ) : (
-        <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          {settlement.balanceNote}
-        </p>
-      )}
+        <dl className="mt-4 divide-y divide-[rgba(255,238,222,0.05)]">
+          <SettlementRow label="Transaction" value={settlement.txHash} />
+          <SettlementRow
+            label="Broadcast by"
+            mono={false}
+            value={
+              settlement.mode === "SOLVER"
+                ? "The Vortex solver (backend key)"
+                : "Your wallet (no solver configured)"
+            }
+          />
+          <SettlementRow
+            label="Receipt"
+            mono={false}
+            tone={
+              settlement.receipt === "confirmed"
+                ? "gain"
+                : settlement.receipt === "reverted"
+                  ? "loss"
+                  : "muted"
+            }
+            value={
+              settlement.receipt === "confirmed"
+                ? "Confirmed onchain"
+                : settlement.receipt === "reverted"
+                  ? "Reverted onchain"
+                  : "Not verified in this browser"
+            }
+          />
+          <SettlementRow
+            label="Block"
+            value={settlement.blockNumber === null ? "—" : settlement.blockNumber.toString()}
+            tone={settlement.blockNumber === null ? "muted" : "default"}
+          />
+          <SettlementRow
+            label="Maker"
+            value={settlement.maker === null ? "—" : truncateAddress(settlement.maker)}
+            tone={settlement.maker === null ? "muted" : "default"}
+          />
+          <SettlementRow
+            label="Maker WBTC before"
+            value={before === null ? "—" : amount(before)}
+            tone={before === null ? "muted" : "default"}
+          />
+          <SettlementRow
+            label="Maker WBTC after"
+            value={after === null ? "—" : amount(after)}
+            tone={after === null ? "muted" : "default"}
+          />
+        </dl>
+
+        {settlement.balanceNote === null ? (
+          <p className="mt-4 text-xs leading-relaxed text-say-3">
+            Balances read with <code className="num">balanceOf</code> at blocks{" "}
+            {settlement.blockNumber === null
+              ? "—"
+              : `${(settlement.blockNumber - 1n).toString()} and ${settlement.blockNumber.toString()}`}
+            .
+          </p>
+        ) : (
+          <CautionNote>{settlement.balanceNote}</CautionNote>
+        )}
+      </div>
     </section>
   );
 }
@@ -253,8 +359,55 @@ export function GrowClient() {
     snapshot.state === "EXECUTING" && mode === "WALLET"
       ? "No solver is configured, so confirm the prepared transaction in your wallet."
       : snapshot.state === "CONFIRMED" && settlement?.receipt === "unverified"
-        ? "The cycle was broadcast, but no receipt could be read in this browser — treat it as submitted, not settled."
+        ? "The cycle was broadcast, but no receipt could be read in this browser, so treat it as submitted, not settled."
         : STATUS_COPY[snapshot.state];
+
+  /*
+    Progress is derived from evidence, never from optimism: an opportunity on
+    screen proves the scan ran, a prepared route proves the API built one, a
+    settlement proves something was broadcast. Failure is only pinned to a step
+    when no other step could have been the one that failed.
+  */
+  const broadcast = settlement !== null || snapshot.txHash !== null;
+  const stepFacts = [
+    {
+      label: "Scan",
+      done: opportunity !== null || snapshot.state === "NO_OPPORTUNITY",
+      active: scanning,
+    },
+    {
+      label: "Prepare route",
+      done: prepared !== null,
+      active: snapshot.state === "PREPARING_ROUTE",
+    },
+    {
+      label: "Simulate",
+      done: broadcast || snapshot.state === "EXECUTING" || snapshot.state === "CONFIRMED",
+      active: snapshot.state === "SIMULATING",
+    },
+    { label: "Broadcast", done: broadcast, active: snapshot.state === "EXECUTING" },
+    { label: "Confirm", done: snapshot.state === "CONFIRMED", active: false },
+  ];
+  const failedStep: number | null =
+    snapshot.state !== "FAILED"
+      ? null
+      : opportunity === null
+        ? 0
+        : prepared === null
+          ? 1
+          : settlement === null
+            ? null
+            : 4;
+  const steps = stepFacts.map((step, index) => ({
+    label: step.label,
+    tone: (index === failedStep
+      ? "failed"
+      : step.active
+        ? "active"
+        : step.done
+          ? "done"
+          : "pending") as StepTone,
+  }));
 
   const handleScan = () => {
     setExecutionNote(null);
@@ -300,214 +453,199 @@ export function GrowClient() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <PageHeader
-        overline="Same-asset compounding"
-        title="Grow WBTC"
-        description="Only execute when the position ends with more WBTC. A custom Aqua app temporarily pulls maker WBTC, runs one atomic cycle across the Vortex PermAMM and an external venue, and returns principal plus profit."
+    <Page>
+      <PageHead
+        title="Vortex Grow"
+        lead="Only execute when the position ends with more WBTC. A custom Aqua app temporarily pulls maker WBTC, runs one atomic cycle across the Vortex PermAMM and an external venue, then returns principal plus profit."
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}
 
       {strategyIsPlaceholder ? (
-        <div
-          role="status"
-          className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
-        >
-          <span className="font-medium text-amber-300">
-            Placeholder strategy hash.
-          </span>{" "}
-          Scans are sent for{" "}
-          <span className="font-mono text-xs">{truncateAddress(strategyHash)}</span>,
-          which exists only in this app — a live API answers{" "}
-          <span className="font-mono text-xs">STRATEGY_NOT_FOUND</span> for it. Set{" "}
-          <span className="font-mono text-xs">
-            NEXT_PUBLIC_DEMO_GROW_STRATEGY_HASH
-          </span>{" "}
-          to the seeded Grow strategy hash for this deployment to scan the real
-          one.
+        <div role="status" className="panel-raised mb-6 flex gap-3 p-4">
+          <span
+            aria-hidden="true"
+            className="mt-[7px] inline-block size-[6px] shrink-0 rotate-45 bg-warn"
+          />
+          <p className="text-sm leading-relaxed text-say-2">
+            <span className="text-warn">Placeholder strategy hash.</span> Scans
+            are sent for <span className="num text-say-1">{truncateAddress(strategyHash)}</span>,
+            which exists only in this app: a live API answers{" "}
+            <span className="num text-say-1">STRATEGY_NOT_FOUND</span> for it. Set{" "}
+            <span className="num text-say-1">NEXT_PUBLIC_DEMO_GROW_STRATEGY_HASH</span>{" "}
+            to the seeded Grow strategy hash for this deployment to scan the real
+            one.
+          </p>
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-        <div className="space-y-4">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] lg:gap-8">
+        <div className="space-y-6">
           <form
-            className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
+            className="panel p-5"
             onSubmit={(event) => {
               event.preventDefault();
               handleScan();
             }}
           >
-            <div className="space-y-2">
-              <label htmlFor="grow-principal" className="block text-sm text-zinc-400">
-                Principal
-              </label>
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
-                <input
-                  id="grow-principal"
-                  name="grow-principal"
-                  type="text"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={principalInput}
-                  onChange={(event) => {
-                    setPrincipalInput(event.target.value);
-                    setInputError(null);
-                  }}
-                  aria-invalid={inputError !== null}
-                  className="w-full bg-transparent font-mono text-lg tabular-nums text-zinc-100 outline-none placeholder:text-zinc-700"
-                />
-                <span className="shrink-0 text-sm font-medium text-zinc-300">
-                  WBTC
-                </span>
-              </div>
+            <label htmlFor="grow-principal" className="block text-sm text-say-2">
+              Principal
+            </label>
+            {/* Money is the loudest thing on this form, so the amount is set
+                well above every label around it. */}
+            <div className="panel-raised mt-2.5 flex items-center gap-3 px-4 py-3">
+              <input
+                id="grow-principal"
+                name="grow-principal"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={principalInput}
+                onChange={(event) => {
+                  setPrincipalInput(event.target.value);
+                  setInputError(null);
+                }}
+                aria-invalid={inputError !== null}
+                className="num w-full min-w-0 bg-transparent text-xl text-say-1 outline-none placeholder:text-say-3"
+              />
+              <span className="shrink-0 text-sm text-say-2">WBTC</span>
             </div>
 
             {inputError === null ? null : (
-              <p role="alert" className="text-sm text-red-400">
+              <p role="alert" className="mt-3 text-sm leading-relaxed text-loss">
                 {inputError}
               </p>
             )}
 
-            <button
+            <Action
               type="submit"
               disabled={scanning || running}
-              aria-busy={scanning}
-              className="w-full rounded-lg bg-teal-500 px-4 py-3 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
+              busy={scanning}
+              className="mt-4 w-full"
             >
               {scanning ? "Scanning…" : "Scan for opportunity"}
-            </button>
+            </Action>
           </form>
 
           {isConnected ? null : (
-            <p className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-400">
-              Scanning works without a wallet. Connect one on chain {chainId} to
-              broadcast the cycle yourself when the API has no solver key.
+            <p className="panel px-5 py-4 text-sm leading-relaxed text-say-2">
+              Scanning works without a wallet. Connect one on chain{" "}
+              <span className="num text-say-1">{chainId}</span> to broadcast the
+              cycle yourself when the API has no solver key.
             </p>
           )}
 
-          <section
-            aria-live="polite"
-            className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
-          >
-            <h2 className="mb-3 text-xs font-medium uppercase tracking-widest text-zinc-500">
-              Status
-            </h2>
-            {snapshot.state === "FAILED" ? (
-              <p role="alert" className="text-sm text-red-400">
-                {snapshot.error ?? "The cycle failed."}
-              </p>
-            ) : snapshot.state === "NO_OPPORTUNITY" ? (
-              <p className="text-sm text-zinc-300">
-                {noOpportunityReason ??
-                  (expiredByTimeout
-                    ? "That opportunity expired before it was executed. Scan again to re-price it."
-                    : "The scan returned no opportunity.")}
-              </p>
-            ) : (
-              <p className="text-sm text-zinc-300">{statusMessage}</p>
-            )}
+          <section aria-live="polite" className="panel">
+            <header className="px-5 pt-5">
+              <h2 className="text-[15px] text-say-1">Run status</h2>
+            </header>
 
-            {simulationNote === null ? null : (
-              <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                {simulationNote}
-              </p>
-            )}
+            <div className="p-5">
+              <ProgressRail steps={steps} />
 
-            {executionNote === null ? null : (
-              <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                {executionNote}
-              </p>
-            )}
-
-            {snapshot.txHash === null ? null : (
-              <p className="mt-3 break-all font-mono text-xs tabular-nums text-zinc-400">
-                Transaction: {snapshot.txHash}
-              </p>
-            )}
-
-            {prepared === null ? null : (
-              <div className="mt-4">
-                {/* Only a live prepare ever reaches this state — the fixture
-                    fallback stops the flow — so the badge says so. */}
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <h3 className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
-                    Prepared route
-                  </h3>
-                  <SourceBadge source="live" variant="response" />
-                </div>
-                <dl className="space-y-1 text-xs text-zinc-500">
-                  <div className="flex justify-between gap-3">
-                    <dt>Route hash</dt>
-                    <dd
-                      className="font-mono tabular-nums text-zinc-400"
-                      title={prepared.routeHash}
-                    >
-                      {truncateAddress(prepared.routeHash)}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt>Gas estimate</dt>
-                    <dd className="font-mono tabular-nums text-zinc-400">
-                      {prepared.gasEstimate ?? "—"}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt>Minimum final</dt>
-                    <dd className="font-mono tabular-nums text-zinc-400">
-                      {formatTokenAmount(BigInt(prepared.minFinalAsset), WBTC.decimals)} WBTC
-                    </dd>
-                  </div>
-                </dl>
+              <div className="mt-5">
+                {snapshot.state === "FAILED" ? (
+                  <p role="alert" className="text-sm leading-relaxed text-loss">
+                    {snapshot.error ?? "The cycle failed."}
+                  </p>
+                ) : snapshot.state === "NO_OPPORTUNITY" ? (
+                  <p className="text-sm leading-relaxed text-say-1">
+                    {noOpportunityReason ??
+                      (expiredByTimeout
+                        ? "That opportunity expired before it was executed. Scan again to re-price it."
+                        : "The scan returned no opportunity.")}
+                  </p>
+                ) : (
+                  <p
+                    className={`text-sm leading-relaxed ${
+                      // Green only for a receipt actually read: a broadcast the
+                      // browser could not verify does not get to look settled.
+                      snapshot.state === "CONFIRMED" &&
+                      settlement?.receipt === "confirmed"
+                        ? "text-gain"
+                        : "text-say-1"
+                    }`}
+                  >
+                    {statusMessage}
+                  </p>
+                )}
               </div>
-            )}
 
-            <div className="mt-4 flex flex-wrap gap-3">
-              {snapshot.state === "OPPORTUNITY_READY" || running ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => void handlePrepare()}
-                    disabled={running}
-                    aria-busy={running}
-                    className="rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
+              {simulationNote === null ? null : (
+                <CautionNote>{simulationNote}</CautionNote>
+              )}
+
+              {executionNote === null ? null : (
+                <CautionNote>{executionNote}</CautionNote>
+              )}
+
+              {snapshot.txHash === null ? null : (
+                <p className="mt-4 text-xs leading-relaxed text-say-2">
+                  Transaction:{" "}
+                  <span className="num break-all text-say-1">{snapshot.txHash}</span>
+                </p>
+              )}
+
+              {prepared === null ? null : (
+                <div className="panel-raised mt-5 px-4 py-4">
+                  {/* Only a live prepare ever reaches this state — the fixture
+                      fallback stops the flow — so the badge says so. */}
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <h3 className="text-sm text-say-1">Prepared route</h3>
+                    <SourceBadge source="live" variant="response" />
+                  </div>
+                  <div className="mt-2">
+                    <Rows>
+                      <Row
+                        label="Route hash"
+                        value={
+                          <span title={prepared.routeHash}>
+                            {truncateAddress(prepared.routeHash)}
+                          </span>
+                        }
+                      />
+                      <Row label="Gas estimate" value={prepared.gasEstimate ?? "—"} />
+                      <Row
+                        label="Minimum final"
+                        value={`${formatTokenAmount(BigInt(prepared.minFinalAsset), WBTC.decimals)} WBTC`}
+                      />
+                    </Rows>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
+                {snapshot.state === "OPPORTUNITY_READY" || running ? (
+                  <>
+                    <Action
+                      onClick={() => void handlePrepare()}
+                      disabled={running}
+                      busy={running}
+                    >
+                      {running ? "Running cycle…" : "Prepare route & run cycle"}
+                    </Action>
+                    <QuietAction onClick={() => void refresh()} disabled={running}>
+                      Refresh
+                    </QuietAction>
+                  </>
+                ) : null}
+                {snapshot.state === "NO_OPPORTUNITY" ||
+                snapshot.state === "FAILED" ||
+                snapshot.state === "CONFIRMED" ? (
+                  <Action onClick={handleScan}>Scan again</Action>
+                ) : null}
+                {snapshot.state === "CONFIRMED" || snapshot.state === "FAILED" ? (
+                  <QuietAction
+                    onClick={() => {
+                      setExecutionNote(null);
+                      resetExecution();
+                      reset();
+                    }}
                   >
-                    {running ? "Running cycle…" : "Prepare route & run cycle"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void refresh()}
-                    disabled={running}
-                    className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    Refresh
-                  </button>
-                </>
-              ) : null}
-              {snapshot.state === "NO_OPPORTUNITY" ||
-              snapshot.state === "FAILED" ||
-              snapshot.state === "CONFIRMED" ? (
-                <button
-                  type="button"
-                  onClick={handleScan}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600"
-                >
-                  Scan again
-                </button>
-              ) : null}
-              {snapshot.state === "CONFIRMED" || snapshot.state === "FAILED" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExecutionNote(null);
-                    resetExecution();
-                    reset();
-                  }}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600"
-                >
-                  Start over
-                </button>
-              ) : null}
+                    Start over
+                  </QuietAction>
+                ) : null}
+              </div>
             </div>
           </section>
         </div>
@@ -516,74 +654,88 @@ export function GrowClient() {
           {settlement === null ? null : <SettlementPanel settlement={settlement} />}
 
           {opportunity === null || source === null ? (
-            <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-12 text-center text-sm text-zinc-500">
-              No opportunity on screen. Scan to price a cycle against current
-              venue liquidity.
-            </div>
+            <section className="panel flex flex-col items-center justify-center px-6 py-16 text-center">
+              {/* The mark sits bare on the surface: no tile, no chip. */}
+              <VortexMark size={40} className="text-cu-dim" />
+              <p className="mt-6 text-base text-say-1">No opportunity on screen.</p>
+              <p className="mt-2 max-w-sm text-sm leading-relaxed text-say-2">
+                Scan to price a cycle against current venue liquidity. Nothing is
+                quoted until you do, so there is no profit figure to show yet.
+              </p>
+            </section>
           ) : (
             <>
-              <OpportunityCard
-                opportunity={opportunity}
-                source={source}
-                secondsRemaining={secondsRemaining}
-              />
               <ProfitBreakdown
                 principal={BigInt(opportunity.principalAmount)}
                 grossProfit={BigInt(opportunity.estimatedGrossProfit)}
                 performanceFee={BigInt(opportunity.performanceFee)}
                 source={source}
               />
+              <OpportunityCard
+                opportunity={opportunity}
+                source={source}
+                secondsRemaining={secondsRemaining}
+              />
             </>
           )}
         </div>
       </div>
 
-      <details className="mt-8 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-        <summary className="cursor-pointer text-xs font-medium uppercase tracking-widest text-zinc-500">
+      <details open className="group panel mt-8 p-5 sm:p-6">
+        <summary className="flex cursor-pointer list-none items-center gap-2.5 font-display text-[15px] text-say-1 marker:content-none [&::-webkit-details-marker]:hidden">
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 12 12"
+            className="size-3 shrink-0 text-say-3 group-open:rotate-90 motion-safe:transition-transform motion-safe:duration-200"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M4 2.5 L8 6 L4 9.5" />
+          </svg>
           How the cycle works
         </summary>
+
+        {/* Wide on a phone, so it scrolls inside its own box rather than
+            dragging the page sideways. */}
         <div className="mt-6 overflow-x-auto">
-          <div className="flex min-w-0 flex-col items-center">
-            <FlowBox title="Aqua maker" detail="Custodies the WBTC principal" />
-            <FlowEdge label="pull" />
-            <FlowBox title="Vortex Grow app" detail="Orchestrates the atomic cycle" />
-            <FlowEdge label="leg 1" />
-            <FlowBox title="Vortex PermAMM" detail="WBTC → USDC" />
-            <FlowEdge label="leg 2" />
-            <FlowBox
-              title="External venue (Uniswap API route)"
-              detail="USDC → WBTC"
-            />
-            <FlowEdge label="check" />
-            <FlowBox
-              accent
-              title="Profit check"
-              detail={`final WBTC ${">"} initial WBTC or the whole transaction reverts`}
-            />
-            <FlowEdge label="fee" />
-            <FlowBox title="Performance fee" detail="Taken from realized profit only" />
-            <FlowEdge label="push" />
-            <FlowBox title="Aqua maker" detail="Principal + profit returned" />
-          </div>
+          <ol className="divide-y divide-[rgba(255,238,222,0.05)]">
+            {CYCLE_STEPS.map((step, index) => (
+              <li
+                key={`${index}-${step.name}`}
+                className="grid grid-cols-1 gap-x-6 gap-y-1 py-3.5 sm:grid-cols-[4rem_minmax(0,14rem)_minmax(0,1fr)] sm:items-baseline"
+              >
+                <span className="text-xs text-cu">{step.edge ?? ""}</span>
+                <span className="flex items-baseline gap-2 text-sm text-say-1">
+                  {step.accent === true ? <StatusMark tone="accent" /> : null}
+                  {step.name}
+                </span>
+                <span
+                  className={`text-sm leading-relaxed ${
+                    step.accent === true ? "text-say-1" : "text-say-2"
+                  }`}
+                >
+                  {step.detail}
+                </span>
+              </li>
+            ))}
+          </ol>
         </div>
 
-        <h3 className="mt-8 text-xs font-medium uppercase tracking-widest text-zinc-500">
-          Invariants
-        </h3>
+        <h3 className="mt-10 text-[15px] text-say-1">Invariants</h3>
         <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           {INVARIANTS.map((invariant) => (
-            <li
-              key={invariant.name}
-              className="rounded-lg border border-zinc-800 bg-zinc-900 p-4"
-            >
-              <p className="text-sm font-medium text-zinc-100">{invariant.name}</p>
-              <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+            <li key={invariant.name} className="panel-raised px-4 py-4">
+              <p className="text-sm text-say-1">{invariant.name}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-say-2">
                 {invariant.detail}
               </p>
             </li>
           ))}
         </ul>
       </details>
-    </div>
+    </Page>
   );
 }

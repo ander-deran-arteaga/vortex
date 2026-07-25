@@ -74,7 +74,7 @@ export function Action({
       onClick={onClick}
       disabled={disabled}
       aria-busy={busy}
-      className={`cut-tr bg-cu px-5 py-2.5 pr-6 text-sm font-medium text-ink-0 transition-colors duration-150 hover:bg-[#d98a5b] disabled:cursor-not-allowed disabled:bg-ink-3 disabled:text-say-3 ${className}`}
+      className={`cut-tr bg-cu px-5 py-2.5 pr-6 text-sm font-medium text-ink-0 transition-colors duration-150 hover:bg-cu-hi disabled:cursor-not-allowed disabled:bg-ink-2 disabled:text-say-2 ${className}`}
     >
       {children}
     </button>

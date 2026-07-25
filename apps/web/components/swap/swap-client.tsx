@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useAccount, useSwitchChain } from "wagmi";
 import { WBTC } from "@vortex/shared";
-import { PageHeader } from "@/components/page-header";
 import { FixtureNotice } from "@/components/source-badge";
 import { QuoteComparison } from "@/components/swap/quote-comparison";
 import { SwapForm } from "@/components/swap/swap-form";
+import { Action, Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
+import { VortexMark } from "@/components/ui/vortex-mark";
 import { useSwapExecution } from "@/hooks/useSwapExecution";
 import { useSwapFlow } from "@/hooks/useSwapFlow";
 import { parseTokenAmount, truncateAddress } from "@/lib/format";
@@ -25,49 +26,111 @@ const STEP_COPY: Record<SwapState, string | null> = {
   BUILDING_TRANSACTION: "Building the execution transaction…",
   SIMULATING: "Simulating the transaction before you sign it…",
   AWAITING_WALLET: "Confirm the transaction in your wallet.",
-  SUBMITTED: "Transaction submitted — waiting for the network.",
+  SUBMITTED: "Transaction submitted. Waiting for the network.",
   CONFIRMING: "Waiting for confirmation…",
   CONFIRMED: "Swap confirmed.",
   EXPIRED: "This quote expired. Request a fresh one to continue.",
   FAILED: null,
 };
 
+/** A warn-toned notice: a mark, then the text. No tinted box, no bright edge. */
+function Caution({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`panel-raised flex gap-3 p-4 ${className}`}>
+      <StatusMark tone="warn" className="mt-[7px] shrink-0" />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** A quiet text action carrying the caution tone, never an outlined twin. */
+function CautionAction({
+  children,
+  onClick,
+  disabled = false,
+  busy = false,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  busy?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-busy={busy}
+      className="mt-2 text-sm font-medium text-warn underline-offset-4 transition-colors duration-150 hover:text-cu disabled:cursor-not-allowed disabled:text-say-3"
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
  * Shown only when the live API rejected a quote AND we are still pointed at a
  * placeholder strategy hash. That combination has exactly one cause worth
  * telling the user about, so this turns an opaque `AQUA_ORDER_UNAVAILABLE`
- * into a one-line fix. It never appears on a fixture-backed response —
- * `FixtureNotice` already owns that case — nor while quotes are succeeding.
+ * into a one-line fix. It never appears on a fixture-backed response:
+ * `FixtureNotice` already owns that case, nor while quotes are succeeding.
  */
 function PlaceholderStrategyNotice() {
   return (
-    <div
-      role="status"
-      className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
-    >
-      <p className="mb-2">
-        <span className="font-medium text-amber-300">
-          Placeholder strategy hash.
-        </span>{" "}
-        This page is quoting against{" "}
-        <span
-          className="font-mono tabular-nums"
-          title={STRATEGY_HASHES.swap}
-        >
-          {truncateAddress(STRATEGY_HASHES.swap)}
-        </span>
-        , a placeholder that exists only in this app&rsquo;s fixtures. No such
-        strategy was ever shipped on the chain this API serves, so it answers{" "}
-        <span className="font-mono">AQUA_ORDER_UNAVAILABLE</span> (or{" "}
-        <span className="font-mono">NO_VENUE_AVAILABLE</span>) instead of
-        pricing the trade. The comparison is unavailable, not unfavourable.
-      </p>
-      <p>
-        Set <span className="font-mono">NEXT_PUBLIC_DEMO_STRATEGY_HASH</span> to
-        the strategy hash the demo seeding actually produced, then restart the
-        web app so the value is rebuilt into the client.
-      </p>
+    <div role="status" className="mb-6">
+      <Caution>
+        <p className="text-sm leading-relaxed text-say-2">
+          <span className="text-warn">Placeholder strategy hash.</span> This
+          page is quoting against{" "}
+          <span className="num text-say-1" title={STRATEGY_HASHES.swap}>
+            {truncateAddress(STRATEGY_HASHES.swap)}
+          </span>
+          , a placeholder that exists only in this app&rsquo;s fixtures. No such
+          strategy was ever shipped on the chain this API serves, so it answers{" "}
+          <span className="num text-say-1">AQUA_ORDER_UNAVAILABLE</span> (or{" "}
+          <span className="num text-say-1">NO_VENUE_AVAILABLE</span>) instead of
+          pricing the trade. The comparison is unavailable, not unfavourable.
+        </p>
+        <p className="mt-3 text-sm leading-relaxed text-say-2">
+          Set{" "}
+          <span className="num text-say-1">NEXT_PUBLIC_DEMO_STRATEGY_HASH</span>{" "}
+          to the strategy hash the demo seeding actually produced, then restart
+          the web app so the value is rebuilt into the client.
+        </p>
+      </Caution>
     </div>
+  );
+}
+
+/**
+ * The comparison slot before there is a comparison. Each variant says what
+ * would be here and why it is not; the failure variant defers to the execution
+ * panel, which carries the API's own error code verbatim.
+ */
+function ComparisonPlaceholder({ status }: { status: "empty" | "loading" | "failed" }) {
+  const copy =
+    status === "loading"
+      ? "Pricing this trade at both venues. The comparison appears as soon as Aqua and the Uniswap API answer."
+      : status === "failed"
+        ? "No comparison to show: this request did not come back with a price. The reason, as the API reported it, is in the execution panel."
+        : "Nothing to compare yet. Enter a WBTC amount and request a quote: Aqua prices it against maker inventory, the Uniswap API prices the same trade against external liquidity, and the higher net output after gas wins.";
+
+  return (
+    <Panel cut title="Venue comparison">
+      <div className="flex flex-col items-center gap-5 px-2 py-12 text-center">
+        <VortexMark
+          size={36}
+          className={status === "failed" ? "text-say-3/60" : "text-say-3"}
+        />
+        <p className="max-w-md text-[15px] leading-relaxed text-say-2">{copy}</p>
+      </div>
+    </Panel>
   );
 }
 
@@ -127,10 +190,10 @@ export function SwapClient() {
 
   const handleExecute = () => {
     // A fixture quote has no session the builder would recognise, so there is
-    // nothing to sign — say so rather than sending a doomed request.
+    // nothing to sign. Say so rather than sending a doomed request.
     if (source === "fixture") {
       setExecutionNote(
-        "Execution needs the live Vortex API — this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real.",
+        "Execution needs the live Vortex API: this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real.",
       );
       return;
     }
@@ -148,26 +211,45 @@ export function SwapClient() {
   // The live API rejected the QUOTE itself (`quote === null` in FAILED rules
   // out a failure further down the flow, where a quote did succeed), and we are
   // still on a placeholder hash. A fixture-backed response can never satisfy
-  // this — `source` is "live" only when the API actually answered.
+  // this: `source` is "live" only when the API actually answered.
   const showPlaceholderNotice =
     STRATEGY_HASHES.isPlaceholder &&
     source === "live" &&
     quote === null &&
     snapshot.state === "FAILED";
 
+  const failed = snapshot.state === "FAILED";
+  const confirmed = snapshot.state === "CONFIRMED";
+  const quoteExpired = snapshot.state === "EXPIRED";
+  const terminal = failed || confirmed || quoteExpired;
+
+  const statusTone = confirmed
+    ? "gain"
+    : quoteExpired
+      ? "warn"
+      : stepMessage === null
+        ? "muted"
+        : "accent";
+  const statusClass = confirmed
+    ? "text-[15px] leading-relaxed text-gain"
+    : quoteExpired
+      ? "text-sm leading-relaxed text-warn"
+      : stepMessage === null
+        ? "text-sm leading-relaxed text-say-2"
+        : "text-sm leading-relaxed text-say-1";
+
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 py-12">
-      <PageHeader
-        overline="Best execution"
+    <Page>
+      <PageHead
         title="Vortex Swap"
-        description="Aqua quotes your trade against its maker inventory while the Uniswap API quotes the same trade against external liquidity. Whichever nets you more after gas is the one that executes."
+        lead="Aqua quotes your trade against its maker inventory while the Uniswap API quotes the same trade against external liquidity. Whichever nets you more after gas is the one that executes."
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}
 
       {showPlaceholderNotice ? <PlaceholderStrategyNotice /> : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
         <div className="space-y-4">
           <SwapForm
             amountInput={amountInput}
@@ -184,36 +266,33 @@ export function SwapClient() {
           />
 
           {!isConnected ? (
-            <p className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-400">
+            <p className="px-1 text-sm leading-relaxed text-say-2">
               Quotes work without a wallet. Connect one to execute a swap.
             </p>
           ) : null}
 
           {wrongChain ? (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-              <p className="mb-2">
+            <Caution>
+              <p className="text-sm leading-relaxed text-say-2">
                 Your wallet is on an unsupported network. Vortex runs on
                 Arbitrum One and the local Arbitrum fork.
               </p>
-              <button
-                type="button"
+              <CautionAction
                 onClick={() => switchChain({ chainId: 42161 })}
                 disabled={switchPending}
-                aria-busy={switchPending}
-                className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/10 disabled:opacity-40"
+                busy={switchPending}
               >
                 {switchPending ? "Switching…" : "Switch to Arbitrum One"}
-              </button>
-            </div>
+              </CautionAction>
+            </Caution>
           ) : null}
         </div>
 
         <div className="space-y-6">
           {quote === null || source === null ? (
-            <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-12 text-center text-sm text-zinc-500">
-              Enter an amount and request a quote to compare Aqua against the
-              Uniswap API.
-            </div>
+            <ComparisonPlaceholder
+              status={quoting ? "loading" : failed ? "failed" : "empty"}
+            />
           ) : (
             <QuoteComparison
               quote={quote}
@@ -222,89 +301,94 @@ export function SwapClient() {
             />
           )}
 
-          <section
-            aria-live="polite"
-            className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
-          >
-            <h2 className="mb-3 text-xs font-medium uppercase tracking-widest text-zinc-500">
-              Execution
-            </h2>
+          {/* Hand-rolled rather than <Panel> so the live region stays on the
+              element that actually holds the changing status. */}
+          <section aria-live="polite" className="panel">
+            <header className="px-5 pt-5">
+              <h2 className="text-[15px] text-say-1">Execution</h2>
+            </header>
 
-            {snapshot.state === "FAILED" ? (
-              <p role="alert" className="mb-4 text-sm text-red-400">
-                {snapshot.error ?? "The swap failed."}
-              </p>
-            ) : stepMessage === null ? (
-              <p className="mb-4 text-sm text-zinc-400">
-                {quote === null
-                  ? "No quote requested yet."
-                  : "Review the comparison, then execute through the winning venue."}
-              </p>
-            ) : (
-              <p className="mb-4 text-sm text-zinc-300">{stepMessage}</p>
-            )}
-
-            {snapshot.txHash === null ? null : (
-              <p className="mb-4 font-mono text-xs tabular-nums text-zinc-400">
-                Transaction: {snapshot.txHash}
-              </p>
-            )}
-
-            {approvalNeed === null ? null : (
-              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                <p className="mb-2">
-                  The router needs an allowance for this trade before it can
-                  settle.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void approve()}
-                  className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/10"
-                >
-                  Approve WBTC
-                </button>
-              </div>
-            )}
-
-            {executionNote === null ? null : (
-              <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                {executionNote}
-              </p>
-            )}
-
-            <div className="flex flex-wrap gap-3">
-              {snapshot.state === "CONFIRMED" || snapshot.state === "FAILED" ||
-              snapshot.state === "EXPIRED" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExecutionNote(null);
-                    reset();
-                  }}
-                  className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600"
-                >
-                  Start over
-                </button>
+            <div className="p-5">
+              {failed ? (
+                /*
+                  The mark carries the tone; the message itself stays at full
+                  ink so a verbatim API error code is never hard to read.
+                */
+                <div role="alert" className="flex gap-3">
+                  <StatusMark tone="loss" className="mt-[7px] shrink-0" />
+                  <p className="min-w-0 text-sm leading-relaxed text-say-1">
+                    {snapshot.error ?? "The swap failed."}
+                  </p>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleExecute}
-                  disabled={!canExecute}
-                  className="rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Execute swap
-                </button>
+                <div className="flex gap-3">
+                  <StatusMark tone={statusTone} className="mt-[7px] shrink-0" />
+                  <p className={`min-w-0 ${statusClass}`}>
+                    {stepMessage === null
+                      ? quote === null
+                        ? "No quote requested yet."
+                        : "Review the comparison, then execute through the winning venue."
+                      : stepMessage}
+                  </p>
+                </div>
+              )}
+
+              {snapshot.txHash === null ? null : (
+                <p className="mt-4 text-sm text-say-2">
+                  Transaction:{" "}
+                  <span className="num break-all text-say-1">{snapshot.txHash}</span>
+                </p>
+              )}
+
+              {approvalNeed === null ? null : (
+                <Caution className="mt-4">
+                  <p className="text-sm leading-relaxed text-say-2">
+                    The router needs an allowance for this trade before it can
+                    settle.
+                  </p>
+                  <CautionAction onClick={() => void approve()}>
+                    Approve WBTC
+                  </CautionAction>
+                </Caution>
+              )}
+
+              {executionNote === null ? null : (
+                <Caution className="mt-4">
+                  <p className="text-sm leading-relaxed text-say-2">
+                    {executionNote}
+                  </p>
+                </Caution>
+              )}
+
+              <div className="mt-6 flex flex-wrap items-center gap-4">
+                {terminal ? (
+                  <Action
+                    onClick={() => {
+                      setExecutionNote(null);
+                      reset();
+                    }}
+                  >
+                    Start over
+                  </Action>
+                ) : (
+                  <Action onClick={handleExecute} disabled={!canExecute}>
+                    Execute swap
+                  </Action>
+                )}
+              </div>
+
+              {address === undefined ? null : (
+                <p className="mt-4 text-xs text-say-2">
+                  Executing as{" "}
+                  <span className="num text-say-2" title={address}>
+                    {truncateAddress(address)}
+                  </span>
+                </p>
               )}
             </div>
-
-            {address === undefined ? null : (
-              <p className="mt-4 text-xs text-zinc-600">
-                Executing as {address}
-              </p>
-            )}
           </section>
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
