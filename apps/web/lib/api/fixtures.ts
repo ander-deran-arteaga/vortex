@@ -31,10 +31,13 @@ const UNISWAP_EDGE_BPS = -4n;
 const AQUA_GAS_USD = "0.42";
 const UNISWAP_GAS_USD = "1.87";
 
-export const FIXTURE_STRATEGY_HASH =
-  "0x7a1f9c2d4b6e8035a9c1d3f5e7b90246813579acbdef02468ace13579bdf0246";
-export const FIXTURE_GROW_STRATEGY_HASH =
-  "0x3c5e7091a2b4d6f8091a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f70";
+/**
+ * Obviously-synthetic placeholders. These are sent as the real `strategyHash`
+ * request parameter, so they must never be mistakable for a deployed
+ * strategy: a repeating nibble pattern reads as fake at a glance.
+ */
+export const FIXTURE_STRATEGY_HASH = `0x${"f1".repeat(32)}`;
+export const FIXTURE_GROW_STRATEGY_HASH = `0x${"f2".repeat(32)}`;
 export const FIXTURE_MAKER = "0x1111111111111111111111111111111111111111";
 
 function applyBps(amount: bigint, edgeBps: bigint): bigint {
@@ -178,8 +181,7 @@ export function buildGrowPrepareFixture(
     data: "0x",
     value: "0",
     gasEstimate: "480000",
-    routeHash:
-      "0x9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0",
+    routeHash: `0x${"f3".repeat(32)}`,
     minFinalAsset: (principal + minimumProfit).toString(),
     expiresAt: now + ttlMs,
   };
