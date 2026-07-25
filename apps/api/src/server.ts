@@ -12,6 +12,7 @@ import type { EnvOverrides } from "./config/env";
 import { RequestValidationError } from "./lib/errors";
 import { registerConfigRoutes } from "./routes/config";
 import { registerExecutionRoutes } from "./routes/executions";
+import { registerGrowRoutes } from "./routes/grow";
 import { registerHealthRoutes } from "./routes/health";
 import { registerQuoteRoutes } from "./routes/quotes";
 import { registerStrategyRoutes } from "./routes/strategies";
@@ -88,6 +89,7 @@ export function buildServer(
   registerStrategyRoutes(app, ctx);
   registerTransactionRoutes(app, ctx);
   registerExecutionRoutes(app, ctx);
+  registerGrowRoutes(app, ctx);
 
   // Sessions are only ever removed by being consumed, so an abandoned quote
   // would otherwise live in the map for the life of the process.
