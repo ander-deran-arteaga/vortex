@@ -47,10 +47,13 @@ export async function apiRequest<T>(
     const parsed = zApiError.safeParse(payload);
     const code = parsed.success ? parsed.data.error.code : "UNKNOWN";
 
-    // A 404 without our error envelope means the route is not registered yet
-    // (backend Phase 3 still landing), which is an availability gap rather
-    // than a request failure.
-    if (response.status === 404 && !parsed.success) {
+    // A 404 means the route is not registered yet (backend Phase 3 still
+    // landing) — an availability gap, not a request failure. The API's
+    // setNotFoundHandler answers unregistered routes with the shared envelope
+    // and code NOT_FOUND, so both the enveloped and bare forms land here.
+    // A resource that genuinely does not exist must use a specific code
+    // (e.g. STRATEGY_NOT_FOUND) so it surfaces as a real error instead.
+    if (response.status === 404 && (!parsed.success || code === "NOT_FOUND")) {
       throw new ApiUnavailableError(`${method} ${path} is not implemented yet`);
     }
 

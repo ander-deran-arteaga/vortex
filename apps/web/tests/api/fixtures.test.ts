@@ -108,6 +108,17 @@ describe("exchange quote fixture economics", () => {
     expect(BigInt(aqua.minimumAmountOut) < BigInt(aqua.amountOut)).toBe(true);
   });
 
+  it("stays schema-valid for a dust trade where gas exceeds the output", () => {
+    // 1 satoshi of WBTC quotes ~0.001 USDC, far below the flat gas cost.
+    const dust = buildExchangeQuoteFixture(
+      { ...quoteRequest, amountIn: "1" },
+      { now: NOW },
+    );
+    expect(zExchangeQuoteResponse.safeParse(dust).success).toBe(true);
+    expect(BigInt(dust.comparison.aqua?.netAmountOut ?? "-1")).toBeGreaterThanOrEqual(0n);
+    expect(BigInt(dust.comparison.uniswap?.netAmountOut ?? "-1")).toBeGreaterThanOrEqual(0n);
+  });
+
   it("expires 45 seconds after the supplied clock", () => {
     const quote = buildExchangeQuoteFixture(quoteRequest, { now: NOW });
     expect(quote.expiresAt).toBe(NOW + 45_000);

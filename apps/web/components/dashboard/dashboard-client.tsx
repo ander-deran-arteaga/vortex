@@ -16,21 +16,26 @@ const KIND_LABEL: Record<ExecutionKind, string> = {
   GROW: "Vortex Grow",
 };
 
-function decimalsForAddress(address: string | null): number {
+/**
+ * Returns undefined for an address we cannot identify. Defaulting to 18 would
+ * render a money value wrong by ten orders of magnitude; an em dash is the
+ * honest answer.
+ */
+function decimalsForAddress(address: string | null): number | undefined {
   if (address === null) {
-    return WBTC.decimals;
+    return undefined;
   }
-  const known = TOKENS.find(
+  return TOKENS.find(
     (token) => token.address.toLowerCase() === address.toLowerCase(),
-  );
-  return known?.decimals ?? 18;
+  )?.decimals;
 }
 
 function formatAmount(value: string | null, address: string | null): string {
-  if (value === null) {
+  const decimals = decimalsForAddress(address);
+  if (value === null || decimals === undefined) {
     return "—";
   }
-  return formatTokenAmount(BigInt(value), decimalsForAddress(address));
+  return formatTokenAmount(BigInt(value), decimals);
 }
 
 /** Aggregates are computed from the records themselves, never hardcoded. */
@@ -115,6 +120,16 @@ export function DashboardClient() {
   const anyFixture = [config.data, executions.data, swapHealth.data, growHealth.data].some(
     (result) => result?.source === "fixture",
   );
+  // A failed read is not the same as "nothing happened yet". Without this the
+  // page would assert an empty history as fact, unbadged.
+  const failures: { label: string; message: string }[] = [
+    { label: "Config", error: config.error },
+    { label: "Executions", error: executions.error },
+    { label: "Vortex Swap strategy", error: swapHealth.error },
+    { label: "Vortex Grow strategy", error: growHealth.error },
+  ].flatMap(({ label, error }) =>
+    error instanceof Error ? [{ label, message: error.message }] : [],
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
@@ -126,17 +141,39 @@ export function DashboardClient() {
 
       {anyFixture ? <FixtureNotice className="mb-6" /> : null}
 
+      {failures.length === 0 ? null : (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+        >
+          <p className="mb-1 font-medium text-red-300">
+            Some reads failed — the panels below are incomplete.
+          </p>
+          <ul className="list-inside list-disc">
+            {failures.map((failure) => (
+              <li key={failure.label}>
+                {failure.label}: {failure.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid gap-6 md:grid-cols-2">
         <Panel title="System status" source={config.data?.source}>
           <dl className="space-y-2">
             <div className="flex items-center justify-between gap-4">
               <dt className="text-sm text-zinc-400">API</dt>
               <dd className="text-sm text-zinc-100">
-                {config.data === undefined
-                  ? "—"
-                  : config.data.source === "live"
-                    ? "Reachable"
-                    : "Not reachable"}
+                {config.error instanceof Error
+                  ? "Error"
+                  : config.data === undefined
+                    ? "—"
+                    : config.data.source === "live"
+                      ? failures.length === 0
+                        ? "Reachable"
+                        : "Reachable, some reads failing"
+                      : "Not reachable"}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
@@ -190,7 +227,12 @@ export function DashboardClient() {
 
       <div className="mt-6">
         <Panel title="Recent executions" source={executions.data?.source}>
-          {records.length === 0 ? (
+          {executions.error instanceof Error ? (
+            <p className="text-sm text-red-300">
+              Execution history could not be loaded, so this panel is empty for
+              an unknown reason rather than because nothing happened.
+            </p>
+          ) : records.length === 0 ? (
             <p className="text-sm text-zinc-500">
               No executions recorded yet.
             </p>

@@ -61,6 +61,10 @@ export const SWAP_TRANSITIONS: Record<
   IDLE: { REQUEST_QUOTE: "FETCHING_QUOTE" },
   FETCHING_QUOTE: { QUOTE_SUCCESS: "QUOTE_READY", QUOTE_FAILURE: "FAILED" },
   QUOTE_READY: {
+    // Re-quoting a different size is a normal user action, so a live quote
+    // must not trap the form. The reducer's REQUEST_QUOTE branch clears the
+    // stale quote context on the way out.
+    REQUEST_QUOTE: "FETCHING_QUOTE",
     APPROVAL_NEEDED: "APPROVAL_REQUIRED",
     PERMIT_REQUIRED: "SIGNING_PERMIT",
     PROCEED: "BUILDING_TRANSACTION",

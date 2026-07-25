@@ -76,17 +76,17 @@ export function SwapClient() {
   };
 
   const handleExecute = () => {
-    // Nothing here may imply a swap happened. Until the backend comparison
-    // router is live there is no transaction to build, so we say so instead
-    // of advancing the flow.
-    if (source === "fixture") {
-      setExecutionNote(
-        "Execution needs the live Vortex API — this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real.",
-      );
-      return;
-    }
-    setExecutionNote(null);
-    proceed();
+    // Nothing here may imply a swap happened, and the flow must not advance
+    // into a state nothing can service. The transaction builder
+    // (buildUniswapTransaction) and the Aqua settlement path both land with
+    // the backend comparison router, so until then this explains rather than
+    // dispatching — otherwise the machine parks in BUILDING_TRANSACTION with
+    // no exit and the page needs a reload.
+    setExecutionNote(
+      source === "fixture"
+        ? "Execution needs the live Vortex API — this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real."
+        : "This quote is live, but the execution path is not wired up yet: building and broadcasting the winning venue's transaction lands with the backend transaction builder. Nothing was signed or sent.",
+    );
   };
 
   const canExecute =

@@ -122,6 +122,14 @@ export function QuoteComparison({
   secondsRemaining: number | null;
 }) {
   const selection = selectVenue(quote);
+  // quote.selectedVenue is what the backend will actually execute; the locally
+  // computed winner is a cross-check. If they disagree, say so rather than
+  // silently highlighting one and executing the other.
+  const executingVenue = quote.selectedVenue;
+  const disagreement =
+    !selection.uncontested &&
+    selection.winner !== null &&
+    selection.winner !== executingVenue;
   const expired = secondsRemaining !== null && secondsRemaining === 0;
   const urgent = secondsRemaining !== null && secondsRemaining > 0 && secondsRemaining <= 10;
 
@@ -134,7 +142,7 @@ export function QuoteComparison({
         <div className="flex items-center gap-3">
           {secondsRemaining === null ? null : (
             <span
-              aria-live="polite"
+              aria-live="off"
               className={
                 expired
                   ? "text-xs font-medium text-red-400"
@@ -151,6 +159,16 @@ export function QuoteComparison({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
+        {disagreement ? (
+          <p
+            role="alert"
+            className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 md:col-span-2"
+          >
+            The venue with the higher net output is not the one the API marked
+            for execution ({executingVenue}). Refresh the quote before
+            executing.
+          </p>
+        ) : null}
         {quote.comparison.aqua === null ? (
           <UnavailableCard title="Aqua · SwapVM" subtitle="Maker inventory" />
         ) : (
@@ -184,6 +202,9 @@ export function QuoteComparison({
       >
         <span className="font-medium">Selected venue: </span>
         {describeSelection(selection)}
+        <span className="sr-only">
+          {` Executing venue reported by the API: ${executingVenue}.`}
+        </span>
       </p>
     </div>
   );

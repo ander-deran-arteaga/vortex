@@ -53,11 +53,32 @@ describe("apiRequest error mapping", () => {
     );
   });
 
-  it("keeps a 404 that carries our envelope as a real request error", async () => {
+  it("treats the API's enveloped NOT_FOUND as an unregistered route", async () => {
+    // apps/api answers unregistered routes with the shared envelope and code
+    // NOT_FOUND, so this is the shape the fixture fallback must recognise
+    // while the Phase 3 routes are still landing.
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        jsonResponse({ error: { code: "NOT_FOUND", message: "no such strategy" } }, 404),
+        jsonResponse(
+          { error: { code: "NOT_FOUND", message: "route POST /api/v1/quotes/exchange not found" } },
+          404,
+        ),
+      ),
+    );
+    await expect(
+      apiRequest("/api/v1/quotes/exchange", { schema }),
+    ).rejects.toBeInstanceOf(ApiUnavailableError);
+  });
+
+  it("keeps a resource-specific 404 as a real request error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        jsonResponse(
+          { error: { code: "STRATEGY_NOT_FOUND", message: "no such strategy" } },
+          404,
+        ),
       ),
     );
     await expect(

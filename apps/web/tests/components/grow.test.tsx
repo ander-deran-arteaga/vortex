@@ -94,6 +94,7 @@ describe("profit breakdown", () => {
         principal={100_000_000n}
         grossProfit={300_000n}
         performanceFee={60_000n}
+        source="fixture"
       />,
     );
     expect(screen.getByText("1.00000000 WBTC")).toBeInTheDocument();
@@ -105,7 +106,12 @@ describe("profit breakdown", () => {
 
   it("says the fee comes only from realized profit", () => {
     render(
-      <ProfitBreakdown principal={100_000_000n} grossProfit={300_000n} performanceFee={60_000n} />,
+      <ProfitBreakdown
+        principal={100_000_000n}
+        grossProfit={300_000n}
+        performanceFee={60_000n}
+        source="fixture"
+      />,
     );
     expect(screen.getByText(/only to realized profit/i)).toBeInTheDocument();
   });

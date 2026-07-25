@@ -4,12 +4,19 @@ import { SourceBadge } from "@/components/source-badge";
 import type { DataSource } from "@/lib/api/source";
 import { basisPointsToPercent, formatTokenAmount } from "@/lib/format";
 
-/** WBTC is 8 decimals and USDC is 6 — never assume 18. */
-function decimalsFor(token: StrategyTokenHealth): number {
-  const known = TOKENS.find(
+/**
+ * WBTC is 8 decimals and USDC is 6 — never assume 18. An unrecognised token
+ * yields undefined so the row renders an em dash instead of a number that is
+ * wrong by orders of magnitude.
+ */
+function decimalsFor(token: StrategyTokenHealth): number | undefined {
+  return TOKENS.find(
     (candidate) => candidate.address.toLowerCase() === token.address.toLowerCase(),
-  );
-  return known?.decimals ?? 18;
+  )?.decimals;
+}
+
+function amountCell(value: string, decimals: number | undefined): string {
+  return decimals === undefined ? "—" : formatTokenAmount(BigInt(value), decimals);
 }
 
 function CoverageBadge({ health }: { health: StrategyHealth }) {
@@ -85,16 +92,16 @@ export function CoveragePanel({
                     {token.symbol}
                   </th>
                   <td className="py-2 pr-4 text-right font-mono text-sm tabular-nums text-zinc-400">
-                    {formatTokenAmount(BigInt(token.virtualBalance), decimals)}
+                    {amountCell(token.virtualBalance, decimals)}
                   </td>
                   <td className="py-2 pr-4 text-right font-mono text-sm tabular-nums text-zinc-400">
-                    {formatTokenAmount(BigInt(token.actualBalance), decimals)}
+                    {amountCell(token.actualBalance, decimals)}
                   </td>
                   <td className="py-2 pr-4 text-right font-mono text-sm tabular-nums text-zinc-400">
-                    {formatTokenAmount(BigInt(token.aquaAllowance), decimals)}
+                    {amountCell(token.aquaAllowance, decimals)}
                   </td>
                   <td className="py-2 text-right font-mono text-sm tabular-nums text-zinc-100">
-                    {formatTokenAmount(BigInt(token.executableBalance), decimals)}
+                    {amountCell(token.executableBalance, decimals)}
                   </td>
                 </tr>
               );

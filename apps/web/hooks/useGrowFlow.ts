@@ -26,6 +26,7 @@ export function useGrowFlow() {
   const [noOpportunityReason, setNoOpportunityReason] = useState<string | null>(null);
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
   const [principalAmount, setPrincipalAmount] = useState<bigint | null>(null);
+  const [expiredByTimeout, setExpiredByTimeout] = useState(false);
 
   const { chain } = useAccount();
   const sequenceRef = useRef(0);
@@ -50,8 +51,10 @@ export function useGrowFlow() {
       }
       const sequence = ++sequenceRef.current;
       setOpportunity(null);
+      setSource(null);
       setNoOpportunityReason(null);
       setSecondsRemaining(null);
+      setExpiredByTimeout(false);
       setPrincipalAmount(principal);
 
       try {
@@ -112,13 +115,17 @@ export function useGrowFlow() {
     }
     const sequence = ++sequenceRef.current;
     try {
-      await prepareGrowRoute(opportunity.opportunityId, {
+      const prepared = await prepareGrowRoute(opportunity.opportunityId, {
         now: Date.now(),
         principalAmount: principalAmount.toString(),
       });
       if (sequence !== sequenceRef.current) {
         return;
       }
+      // The prepare call has its own provenance: the scan can be live while
+      // the route falls back to a fixture. Dropping it would let fixture route
+      // data render under a "Live data" badge.
+      setSource(prepared.source);
       // ROUTE_READY moves the machine to SIMULATING. EXECUTING is entered only
       // from a real simulation against a live backend, so the flow deliberately
       // rests here rather than pretending a cycle ran.
@@ -141,15 +148,18 @@ export function useGrowFlow() {
       setSecondsRemaining(null);
       return;
     }
+    let timer: ReturnType<typeof setInterval> | undefined;
     const tick = () => {
       const remaining = secondsUntil(opportunity.expiresAt, Date.now());
       setSecondsRemaining(remaining);
       if (remaining === 0) {
         dispatchIfAllowed({ type: "OPPORTUNITY_EXPIRED" });
+        setExpiredByTimeout(true);
+        if (timer !== undefined) clearInterval(timer);
       }
     };
     tick();
-    const timer = setInterval(tick, 1000);
+    timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [opportunity, dispatchIfAllowed]);
 
@@ -160,6 +170,7 @@ export function useGrowFlow() {
     setNoOpportunityReason(null);
     setSecondsRemaining(null);
     setPrincipalAmount(null);
+    setExpiredByTimeout(false);
     dispatchIfAllowed({ type: "RESET" });
   }, [dispatchIfAllowed]);
 
@@ -168,6 +179,7 @@ export function useGrowFlow() {
     opportunity,
     source,
     noOpportunityReason,
+    expiredByTimeout,
     secondsRemaining,
     principalAmount,
     scan,

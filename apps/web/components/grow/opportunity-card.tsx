@@ -76,7 +76,7 @@ export function OpportunityCard({
         <div className="flex items-baseline justify-between gap-4 py-2">
           <dt className="text-sm text-zinc-400">Expiry</dt>
           <dd
-            aria-live="polite"
+            aria-live="off"
             className={
               expired
                 ? "font-mono text-sm tabular-nums text-red-400"

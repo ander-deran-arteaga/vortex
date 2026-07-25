@@ -105,7 +105,16 @@ describe("basisPointsToPercent", () => {
     expect(basisPointsToPercent(-50)).toBe("-0.50%");
   });
 
-  it("rejects non-integers", () => {
-    expect(() => basisPointsToPercent(1.5)).toThrow();
+  it("truncates fractional basis points instead of throwing", () => {
+    // Shared schemas type bps fields as z.number(); coverageBps is a computed
+    // ratio. A throw here would unmount the page from inside render.
+    expect(basisPointsToPercent(1.5)).toBe("0.01%");
+    expect(basisPointsToPercent(9999.9)).toBe("99.99%");
+    expect(basisPointsToPercent(-30.7)).toBe("-0.30%");
+  });
+
+  it("rejects values that cannot be formatted", () => {
+    expect(() => basisPointsToPercent(Number.NaN)).toThrow();
+    expect(() => basisPointsToPercent(Number.POSITIVE_INFINITY)).toThrow();
   });
 });

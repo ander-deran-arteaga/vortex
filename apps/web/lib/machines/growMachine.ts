@@ -54,6 +54,10 @@ export const GROW_TRANSITIONS: Record<
   },
   NO_OPPORTUNITY: { SCAN: "SCANNING" },
   OPPORTUNITY_READY: {
+    // SCAN re-prices a different principal (and clears context); REFRESH
+    // re-prices the one already on screen. Without SCAN here the form silently
+    // ignores a changed principal.
+    SCAN: "SCANNING",
     PREPARE: "PREPARING_ROUTE",
     REFRESH: "REFRESHING",
     OPPORTUNITY_EXPIRED: "NO_OPPORTUNITY",

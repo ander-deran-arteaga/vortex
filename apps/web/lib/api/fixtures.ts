@@ -74,8 +74,12 @@ export function buildExchangeQuoteFixture(
 
   const aquaOut = applyBps(mid, aquaEdge);
   const uniswapOut = applyBps(mid, uniswapEdge);
-  const aquaNet = aquaOut - usdToUsdcBaseUnits(AQUA_GAS_USD);
-  const uniswapNet = uniswapOut - usdToUsdcBaseUnits(UNISWAP_GAS_USD);
+  // Gas can exceed the output on a dust trade. The shared schema types every
+  // amount as /^[0-9]+$/, so the floor keeps the fixture schema-valid instead
+  // of emitting a negative decimal string.
+  const floorAtZero = (value: bigint) => (value < 0n ? 0n : value);
+  const aquaNet = floorAtZero(aquaOut - usdToUsdcBaseUnits(AQUA_GAS_USD));
+  const uniswapNet = floorAtZero(uniswapOut - usdToUsdcBaseUnits(UNISWAP_GAS_USD));
   const selectedVenue = aquaNet >= uniswapNet ? "AQUA" : "UNISWAP";
 
   return {

@@ -1,4 +1,6 @@
 import { WBTC } from "@vortex/shared";
+import { SourceBadge } from "@/components/source-badge";
+import type { DataSource } from "@/lib/api/source";
 import { basisPointsToPercent, formatTokenAmount } from "@/lib/format";
 import { computeGrowBreakdown } from "@/lib/grow-breakdown";
 
@@ -10,10 +12,14 @@ export function ProfitBreakdown({
   principal,
   grossProfit,
   performanceFee,
+  source,
 }: {
   principal: bigint;
   grossProfit: bigint;
   performanceFee: bigint;
+  // This panel is its own bordered section, so it must state its own
+  // provenance — a badge on the sibling card does not cover it.
+  source: DataSource;
 }) {
   const breakdown = computeGrowBreakdown({ principal, grossProfit, performanceFee });
 
@@ -30,9 +36,12 @@ export function ProfitBreakdown({
 
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
-      <h2 className="mb-4 text-xs font-medium uppercase tracking-widest text-zinc-500">
-        Profit breakdown
-      </h2>
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
+          Profit breakdown
+        </h2>
+        <SourceBadge source={source} />
+      </header>
       <dl className="divide-y divide-zinc-800/60">
         {rows.map((row) => (
           <div

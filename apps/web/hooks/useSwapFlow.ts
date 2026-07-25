@@ -109,15 +109,18 @@ export function useSwapFlow() {
       setSecondsRemaining(null);
       return;
     }
+    let timer: ReturnType<typeof setInterval> | undefined;
     const tick = () => {
       const remaining = secondsUntil(quote.expiresAt, Date.now());
       setSecondsRemaining(remaining);
       if (remaining === 0) {
         dispatchIfAllowed({ type: "QUOTE_EXPIRED" });
+        // Nothing left to count down; stop rather than ticking forever.
+        if (timer !== undefined) clearInterval(timer);
       }
     };
     tick();
-    const timer = setInterval(tick, 1000);
+    timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [quote, dispatchIfAllowed]);
 

@@ -67,12 +67,22 @@ export function truncateAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+/**
+ * Formats basis points as a percentage.
+ *
+ * The shared schemas type every bps field the UI consumes as plain
+ * `z.number()`, not `z.number().int()` — `coverageBps` in particular is a
+ * computed executable/virtual ratio and is naturally fractional. Throwing on a
+ * non-integer would unmount the page from inside render, so fractional input
+ * is truncated toward zero instead. Only a value that cannot be formatted at
+ * all (NaN, Infinity) is rejected.
+ */
 export function basisPointsToPercent(bps: number): string {
-  if (!Number.isInteger(bps)) {
-    throw new Error(`basis points must be an integer: ${bps}`);
+  if (!Number.isFinite(bps)) {
+    throw new Error(`basis points must be a finite number: ${bps}`);
   }
   const sign = bps < 0 ? "-" : "";
-  const abs = Math.abs(bps);
+  const abs = Math.trunc(Math.abs(bps));
   const whole = Math.trunc(abs / 100);
   const fraction = (abs % 100).toString().padStart(2, "0");
   return `${sign}${whole}.${fraction}%`;

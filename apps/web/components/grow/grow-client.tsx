@@ -94,6 +94,7 @@ export function GrowClient() {
     opportunity,
     source,
     noOpportunityReason,
+    expiredByTimeout,
     secondsRemaining,
     scan,
     refresh,
@@ -127,14 +128,14 @@ export function GrowClient() {
   };
 
   const handlePrepare = () => {
-    if (source === "fixture") {
-      setExecutionNote(
-        "Preparing a route needs the live Vortex API and the Grow contracts (Phases 6–7). This opportunity came from fixtures, so there is nothing to sign yet.",
-      );
-      return;
-    }
-    setExecutionNote(null);
-    void prepare();
+    // Preparing would move the machine to SIMULATING, and nothing dispatches
+    // SIMULATION_SUCCESS/FAILURE until the Grow contracts and the backend
+    // route builder exist — leaving the user with no exit. Explain instead.
+    setExecutionNote(
+      source === "fixture"
+        ? "Preparing a route needs the live Vortex API and the Grow contracts (Phases 6–7). This opportunity came from fixtures, so there is nothing to sign yet."
+        : "This opportunity is live, but route preparation and the atomic cycle land with the Grow contracts (Phases 6–7). Nothing was signed or sent.",
+    );
   };
 
   return (
@@ -211,7 +212,9 @@ export function GrowClient() {
             ) : snapshot.state === "NO_OPPORTUNITY" ? (
               <p className="text-sm text-zinc-300">
                 {noOpportunityReason ??
-                  "No profitable cycle at current prices after fees and gas."}
+                  (expiredByTimeout
+                    ? "That opportunity expired before it was executed. Scan again to re-price it."
+                    : "The scan returned no opportunity.")}
               </p>
             ) : (
               <p className="text-sm text-zinc-300">{statusMessage}</p>
@@ -292,6 +295,7 @@ export function GrowClient() {
                 principal={BigInt(opportunity.principalAmount)}
                 grossProfit={BigInt(opportunity.estimatedGrossProfit)}
                 performanceFee={BigInt(opportunity.performanceFee)}
+                source={source}
               />
             </>
           )}
