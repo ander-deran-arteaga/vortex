@@ -8,7 +8,8 @@
     "start": "tsx --env-file-if-exists=../../.env --env-file-if-exists=.env src/server.ts",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo": "tsx --env-file-if-exists=../../.env --env-file=.env.demo src/server.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",

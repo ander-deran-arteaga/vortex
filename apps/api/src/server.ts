@@ -14,6 +14,14 @@ import { registerConfigRoutes } from "./routes/config";
 import { registerExecutionRoutes } from "./routes/executions";
 import { registerGrowRoutes } from "./routes/grow";
 import { registerHealthRoutes } from "./routes/health";
+import { loadAquaDemoStrategy } from "./config/aquaDeployment";
+import {
+  diagnoseChainConfiguration,
+  formatPreflight,
+  probeRpcChainId,
+  type PreflightFinding,
+} from "./config/preflight";
+import { rpcUrlForChain } from "./clients/rpcClient";
 import { registerQuoteRoutes } from "./routes/quotes";
 import { registerStrategyRoutes } from "./routes/strategies";
 import { registerTransactionRoutes } from "./routes/transactions";
@@ -105,12 +113,53 @@ export function buildServer(
   return { app, ctx };
 }
 
+/**
+ * Verifies the chain the API is configured for is the chain actually running,
+ * and that it can build swaps. Deliberately outside `buildServer` so tests
+ * stay hermetic and offline.
+ */
+export async function runChainPreflight(
+  ctx: AppContext,
+): Promise<PreflightFinding> {
+  const rpcUrl = rpcUrlForChain(ctx.env);
+  const rpcChainId = await probeRpcChainId(rpcUrl);
+  const chainsWithStrategies = [31337, 42161].filter(
+    (id) => loadAquaDemoStrategy(id) !== null,
+  );
+
+  return diagnoseChainConfiguration({
+    configuredChainId: ctx.env.CHAIN_ID,
+    rpcUrl,
+    rpcChainId,
+    hasAquaStrategy: ctx.aquaExecution !== null,
+    chainsWithStrategies,
+  });
+}
+
 const invokedDirectly =
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const { app, ctx } = buildServer({}, { logger: true });
+
+  // Reported before listening, so a misconfigured chain is visible in the
+  // first lines of output rather than discovered mid-demo.
+  runChainPreflight(ctx)
+    .then((finding) => {
+      if (finding.severity === "ok") {
+        app.log.info(formatPreflight(finding));
+      } else {
+        // Written to stderr as well: a judge or operator scanning the terminal
+        // must not have to notice a single structured log line among many.
+        process.stderr.write(`${formatPreflight(finding)}\n`);
+        app.log.error({ preflight: finding }, finding.message);
+      }
+    })
+    .catch(() => {
+      // A preflight failure must never stop the server from starting.
+    });
+
   app
     .listen({ host: ctx.env.HOST, port: ctx.env.PORT })
     .catch((err: unknown) => {
