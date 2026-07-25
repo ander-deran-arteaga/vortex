@@ -93,15 +93,40 @@ floors.
   (`test_quoteMatchesSwapAndDoesNotConsumeNonce`); a rejected swap surfaces its
   real reason rather than quoting zero (`test_quoteSurfacesHookRejections`).
 
-### Phase 6 — Vortex Grow (planned, §8.4-8.5)
-- Atomicity: failed cycle ⇒ maker actual + virtual balances unchanged.
-- Success requires finalAsset >= max(minFinalAsset, principal + minProfit).
-- Fee taken only from realized profit; principal + net profit pushed back
-  before fee transfer.
-- External call: allowlisted immutable target, exact calldata-hash match,
-  value cap, calldata length cap, no ETH/token residue above dust bound.
-- Signer compromise cannot: bypass profit floor, exceed caps, retarget
-  recipient, call arbitrary contracts, replay routes.
+### Phase 6 — Vortex Grow (ENFORCED — test/compound/VortexGrow.t.sol,
+###   18 tests x 2 directions x 2 token orderings, all green)
+- **Atomicity**: a failed cycle leaves the maker's wallet balance, Aqua virtual
+  balance, and the compounder's asset AND bridge balances exactly as before —
+  the Aqua pull unwinds with everything else, and no fee is paid
+  (`test_failedExternalLegRevertsEverything`,
+  `test_failedCycleLeavesAllBalancesUnchanged`).
+- **Profit floor**: success requires
+  `finalAsset >= max(minFinalAsset, principal + principal*minProfitBps)`.
+  Zero profit reverts; one unit below the floor reverts
+  (`test_zeroProfitReverts`, `test_oneUnitBelowMinimumReverts`).
+- **Fee from profit only**: `fee == performanceFeeBps x grossProfit`, always
+  strictly less than the profit it came from, so principal is never touched.
+  Principal + net profit are pushed back to the maker BEFORE the fee transfer,
+  so a failing fee leg cannot strand maker capital (`test_feeOnlyTakenFromProfit`).
+- **External call is pre-authorized, not arbitrary**: the target is fixed by the
+  immutable strategy (not chosen by the route), the calldata is committed to by
+  hash, `externalValue` must be zero (no ETH may leave), and calldata length is
+  bounded (`test_wrongExternalTargetReverts`, `test_wrongCalldataHashReverts`,
+  `test_externalValueMustBeZero`).
+- **Bridge dust must be exactly zero** — the intermediate asset may not
+  accumulate in the app (`VortexBridgeDustRemains`), asserted in both directions.
+- **Balances are measured as deltas** against pre-existing balances, so a stray
+  donation cannot be counted as profit nor block execution.
+- **Reentrancy fails**: a malicious external venue calling back into
+  `executeCompound` mid-cycle — with a DIFFERENT valid route, so the nonce check
+  is not what stops it — is rejected by Aqua's `nonReentrantStrategy` transient
+  lock (`test_reentrantExternalCallReverts`,
+  `test_swallowedReentrancyLeavesOneCleanCycle`). Mutation-verified: removing
+  the modifier makes both fail.
+- **Signer compromise** cannot bypass the profit floor, exceed the
+  per-execution cap, retarget the external call, or replay a route — the final
+  same-asset balance check is authoritative over any signature
+  (`test_signerCompromiseCannotBreakInvariants`).
 
 ## Known accepted risks (MVP)
 
@@ -112,3 +137,14 @@ floors.
   under-delivers (availability risk, not solvency risk).
 - No governance/upgradability anywhere by design — immutability is the
   security story.
+- **Vortex Grow's external venue is simulated.** `MockExternalRouter` /
+  `MockStalePool` are deliberately mispriced (95k vs the pool's 100k mark) and
+  that gap is the entire source of compound profit. `deployments/31337.grow.json`
+  records `externalVenueKind: "SIMULATED"` and both prices so the UI can label
+  it honestly; a live venue is the Phase 7 objective. Presenting Grow profit as
+  market-earned rather than simulated would be a §21 violation.
+- **The demo scenario moves a real oracle.** `script/SetDemoScenario.s.sol`
+  re-marks the maker so it genuinely prices worse (measured -2.9%), rather than
+  faking a comparison. Because that oracle is shared with the PermAMM hook and
+  Grow, the move is bounded well inside the hook's deviation cap and pinned by
+  `test_demoScenarioOracleMoveIsWithinTolerance`.
