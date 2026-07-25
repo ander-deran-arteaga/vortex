@@ -84,12 +84,13 @@ export function compareVenues(
       }
     : null;
 
+  // A quote reporting 0 gas units has not estimated its gas, so fall back to
+  // the configured default rather than charging the venue nothing.
+  const aquaGasUnits =
+    aquaQuote && aquaQuote.gasUnits > 0n ? aquaQuote.gasUnits : options.aquaGasUnits;
   const aquaGas =
     aquaQuote?.gasCostInOutputToken ??
-    gasCostInOutputToken(
-      aquaQuote?.gasUnits ?? options.aquaGasUnits,
-      uniswapReference,
-    );
+    gasCostInOutputToken(aquaGasUnits, uniswapReference);
 
   const aqua: ComparedVenue | null = aquaQuote
     ? {
@@ -128,7 +129,13 @@ export function compareVenues(
 
   const requiredMargin =
     (uniswap.netAmountOut * BigInt(options.minimumImprovementBps)) / 10_000n;
-  const wins = aqua.netAmountOut >= uniswap.netAmountOut + requiredMargin;
+  // The margin floors to 0 on small trades, which would silently turn the
+  // threshold into a tie-break. Uniswap must keep winning ties: a maker that
+  // merely matches the deep venue never earns the routing.
+  const wins =
+    requiredMargin === 0n
+      ? aqua.netAmountOut > uniswap.netAmountOut
+      : aqua.netAmountOut >= uniswap.netAmountOut + requiredMargin;
 
   return {
     selectedVenue: wins ? "AQUA" : "UNISWAP",

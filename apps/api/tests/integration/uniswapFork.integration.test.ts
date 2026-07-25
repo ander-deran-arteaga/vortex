@@ -60,6 +60,20 @@ const BASE =
 
 const enabled = process.env.VORTEX_INTEGRATION === "1" && Boolean(API_KEY);
 
+/** Only the fields this proof asserts on; the API returns many more. */
+interface QuoteResponseShape {
+  requestId: string;
+  routing: string;
+  quote: {
+    output: { amount: string; minimumAmount: string };
+  };
+}
+
+interface SwapResponseShape {
+  requestId: string;
+  swap: { to: string; data: string; value?: string };
+}
+
 /**
  * Arbitrum WBTC is a proxy whose balance mapping slot is not knowable a
  * priori, so fund the swapper by impersonating an existing large holder
@@ -171,7 +185,7 @@ describe.skipIf(!enabled)("Uniswap API transaction executes on an Arbitrum fork"
         routingPreference: "BEST_PRICE",
       }),
     });
-    const quote = await quoteRes.json();
+    const quote = (await quoteRes.json()) as QuoteResponseShape;
     expect(quoteRes.status, JSON.stringify(quote)).toBe(200);
     expect(quote.routing).toBe("CLASSIC");
     expect(quote.requestId).toBeTruthy();
@@ -207,7 +221,7 @@ describe.skipIf(!enabled)("Uniswap API transaction executes on an Arbitrum fork"
       headers,
       body: JSON.stringify({ quote: quote.quote }),
     });
-    const swap = await swapRes.json();
+    const swap = (await swapRes.json()) as SwapResponseShape;
     expect(swapRes.status, JSON.stringify(swap)).toBe(200);
     expect(swap.swap?.data).toMatch(/^0x[0-9a-fA-F]+$/);
     expect(swap.swap.data.length).toBeGreaterThan(2);
