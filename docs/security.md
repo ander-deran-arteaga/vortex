@@ -66,13 +66,32 @@ floors.
 - Program encoding pinned byte-for-byte to the official v1.0.1 opcode table
   (dispatch indices Deadline=13, Salt=20, Extruction=32).
 
-### Phase 5 — Vortex PermAMM (planned, §8.3)
-- Dynamic-fee pool only; external liquidity forbidden (single managed position).
-- Fee override requires valid EIP-712 auth (domain `Vortex PermAMM`):
-  pool, direction, amount, swapper, price limit, oracle snapshot, deadline,
-  nonce all bound. Replay reverts.
-- Oracle staleness / bid≤mid≤ask ordering / pool-vs-oracle deviation enforced
-  in beforeSwap.
+### Phase 5 — Vortex PermAMM (ENFORCED — test/permamm/VortexHook.t.sol,
+###   21 tests against a REAL v4 PoolManager, all green)
+- Dynamic-fee pool only (`test_poolMustUseDynamicFee`); external liquidity
+  forbidden, single managed position (`test_onlyLiquidityManagerCanAdd`).
+- Fee override requires a valid EIP-712 authorization (domain
+  `Vortex PermAMM`, typehash pinned to shared typedData.ts): pool, direction,
+  amount, price limit, oracle snapshot, deadline and nonce all bound. Wrong
+  pool / direction / amount / signer, expiry, and replay each revert with their
+  own named error.
+- **The signer cannot reach the floor.** The commercial component is clamped
+  into `[minCommercial, maxCommercial]` and the immutable safety fee is added
+  *after* the clamp, so a request of 0 still pays `safety + minCommercial`
+  (`test_feeIsClampedIntoTheImmutableBand`).
+- The fee override is per-swap: the pool's stored dynamic fee is never mutated
+  (`test_poolFeeStateIsUnchangedByOverride`).
+- Oracle staleness, future-dating, bid≤mid≤ask ordering, spread, and
+  pool-vs-oracle deviation all enforced in `beforeSwap`; the authorization also
+  commits to an oracle snapshot hash, so a signature cannot be reused across a
+  price move.
+- Hook callbacks reject any caller other than the PoolManager
+  (`test_hookRejectsDirectCalls`) — otherwise a third party could burn a
+  swapper's nonces.
+- Quoting runs the identical hook path but settles nothing, so quotes equal
+  execution and never consume an authorization
+  (`test_quoteMatchesSwapAndDoesNotConsumeNonce`); a rejected swap surfaces its
+  real reason rather than quoting zero (`test_quoteSurfacesHookRejections`).
 
 ### Phase 6 — Vortex Grow (planned, §8.4-8.5)
 - Atomicity: failed cycle ⇒ maker actual + virtual balances unchanged.
