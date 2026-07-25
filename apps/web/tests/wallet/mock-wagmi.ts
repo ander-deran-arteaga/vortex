@@ -1,0 +1,64 @@
+import { vi } from "vitest";
+
+/**
+ * Wallet state the tests drive. wagmi is mocked rather than run against a real
+ * connector so rejection paths (user declines an approval, wrong network) are
+ * reachable deterministically.
+ */
+export interface WalletScenario {
+  address?: `0x${string}`;
+  chainId?: number;
+  chainName?: string;
+  isConnected: boolean;
+  switchPending?: boolean;
+  writeError?: Error | null;
+}
+
+export const walletState: { current: WalletScenario } = {
+  current: { isConnected: false },
+};
+
+export const switchChainSpy = vi.fn();
+export const writeContractAsyncSpy = vi.fn();
+
+export function setWallet(scenario: WalletScenario) {
+  walletState.current = scenario;
+}
+
+export function resetWallet() {
+  walletState.current = { isConnected: false };
+  switchChainSpy.mockReset();
+  writeContractAsyncSpy.mockReset();
+}
+
+/** Chain object shaped like wagmi's: undefined when the chain is unsupported. */
+function currentChain() {
+  const { chainId, chainName } = walletState.current;
+  if (chainId === undefined) {
+    return undefined;
+  }
+  return { id: chainId, name: chainName ?? `Chain ${chainId}` };
+}
+
+export const wagmiMock = {
+  useAccount: () => ({
+    address: walletState.current.address,
+    chain: currentChain(),
+    isConnected: walletState.current.isConnected,
+  }),
+  useSwitchChain: () => ({
+    switchChain: switchChainSpy,
+    isPending: walletState.current.switchPending ?? false,
+  }),
+  useWriteContract: () => ({
+    writeContractAsync: writeContractAsyncSpy,
+    isPending: false,
+    error: walletState.current.writeError ?? null,
+    reset: vi.fn(),
+  }),
+  useWaitForTransactionReceipt: () => ({
+    isSuccess: false,
+    isLoading: false,
+    data: undefined,
+  }),
+};
