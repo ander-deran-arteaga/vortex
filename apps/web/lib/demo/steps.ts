@@ -5,6 +5,7 @@ import { fetchConfig, fetchExchangeQuote, scanGrowOpportunity } from "@/lib/api/
 import { ApiRequestError, ApiUnavailableError } from "@/lib/api/errors";
 import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import { WBTC, USDC } from "@vortex/shared";
+import { resolveTokens } from "@/lib/tokens";
 import type { DemoStepId, DemoStepOutcome } from "./demoMachine";
 
 export type StepRunResult =
@@ -188,13 +189,14 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
       // layer is missing.
       let sessionId: string;
       let venue: string;
+      const tokens = resolveTokens((await loadConfig(ctx)) ?? undefined);
       try {
         const quote = await fetchExchangeQuote(
           {
             chainId: ctx.chainId,
             strategyHash: STRATEGY_HASHES.swap,
-            tokenIn: WBTC.address,
-            tokenOut: USDC.address,
+            tokenIn: tokens.wbtc.address,
+            tokenOut: tokens.usdc.address,
             amountIn: "100000000",
             taker: "0x0000000000000000000000000000000000000000",
             slippageBps: 30,
@@ -358,13 +360,14 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
     description:
       "Every comparison is benchmarked against a real Uniswap Trade API quote; this is its request ID.",
     run: async (ctx) => {
+      const tokens = resolveTokens((await loadConfig(ctx)) ?? undefined);
       try {
         const result = await fetchExchangeQuote(
           {
             chainId: ctx.chainId,
             strategyHash: STRATEGY_HASHES.swap,
-            tokenIn: WBTC.address,
-            tokenOut: USDC.address,
+            tokenIn: tokens.wbtc.address,
+            tokenOut: tokens.usdc.address,
             amountIn: "100000000",
             taker: "0x0000000000000000000000000000000000000000",
             slippageBps: 30,

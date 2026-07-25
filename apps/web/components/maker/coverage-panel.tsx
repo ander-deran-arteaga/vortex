@@ -1,5 +1,5 @@
 import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
-import { TOKENS } from "@vortex/shared";
+import { decimalsFor as decimalsFrom, resolveTokens, type ResolvedTokens } from "@/lib/tokens";
 import { SourceBadge } from "@/components/source-badge";
 import { Panel, StatusMark } from "@/components/ui/primitives";
 import type { DataSource } from "@/lib/api/source";
@@ -10,11 +10,12 @@ import { basisPointsToPercent, formatTokenAmount } from "@/lib/format";
  * yields undefined so the row renders an em dash instead of a number that is
  * wrong by orders of magnitude.
  */
-function decimalsFor(token: StrategyTokenHealth): number | undefined {
-  return TOKENS.find(
-    (candidate) => candidate.address.toLowerCase() === token.address.toLowerCase(),
-  )?.decimals;
-}
+/**
+ * Falls back to the compile-time Arbitrum tokens when no resolved set is
+ * supplied, so this stays a pure display component: the page that knows which
+ * chain is being served passes the real one in.
+ */
+const FALLBACK_TOKENS = resolveTokens();
 
 function amountCell(value: string, decimals: number | undefined): string {
   return decimals === undefined ? "—" : formatTokenAmount(BigInt(value), decimals);
@@ -50,11 +51,16 @@ export function CoveragePanel({
   health,
   source,
   title = "Balance coverage",
+  tokens = FALLBACK_TOKENS,
 }: {
   health: StrategyHealth;
   source: DataSource;
   title?: string;
+  tokens?: ResolvedTokens;
 }) {
+  const decimalsFor = (token: StrategyTokenHealth): number | undefined =>
+    decimalsFrom(tokens, token.address);
+
   return (
     <Panel
       title={title}

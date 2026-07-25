@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
+import { renderApp } from "../render-app";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { encodeAbiParameters, encodeEventTopics } from "viem";
@@ -171,7 +172,7 @@ function executeCalls(fetchMock: ReturnType<typeof apiWith>): unknown[] {
 async function runCycle() {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const { GrowClient } = await import("@/components/grow/grow-client");
-  render(<GrowClient />);
+  renderApp(<GrowClient />);
 
   await user.click(screen.getByRole("button", { name: /scan for opportunity/i }));
   await waitFor(() => {

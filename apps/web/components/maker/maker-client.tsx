@@ -11,7 +11,8 @@ import {
 } from "@/components/maker/strategy-form";
 import { FixtureNotice } from "@/components/source-badge";
 import { Action, Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
-import { useStrategyHealth } from "@/hooks/useVortexQueries";
+import { useConfig, useStrategyHealth } from "@/hooks/useVortexQueries";
+import { resolveTokens } from "@/lib/tokens";
 import { ApiRequestError } from "@/lib/api";
 import { ERC20_APPROVE_ABI, asEvmAddress } from "@/lib/erc20";
 import { parseTokenAmount } from "@/lib/format";
@@ -98,6 +99,8 @@ export function MakerClient() {
   // through the hash the demo seeding produced. `fetchStrategyHealth` only
   // falls back to a fixture for the two known fixture hashes, so a real hash
   // surfaces the API's own error instead of a fabricated healthy maker.
+  const config = useConfig();
+  const tokens = resolveTokens(config.data?.data);
   const swapHealth = useStrategyHealth(STRATEGY_HASHES.swap);
   const growHealth = useStrategyHealth(STRATEGY_HASHES.grow);
 
@@ -345,6 +348,7 @@ export function MakerClient() {
           )
         ) : (
           <CoveragePanel
+            tokens={tokens}
             health={swapHealth.data.data}
             source={swapHealth.data.source}
             title="Vortex Swap balance coverage"
@@ -356,6 +360,7 @@ export function MakerClient() {
           )
         ) : (
           <CoveragePanel
+            tokens={tokens}
             health={growHealth.data.data}
             source={growHealth.data.source}
             title="Vortex Grow balance coverage"

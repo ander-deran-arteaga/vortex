@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { ExecutionKind, ExecutionRecord } from "@vortex/shared";
-import { TOKENS, WBTC } from "@vortex/shared";
+import { WBTC } from "@vortex/shared";
+import { decimalsFor as decimalsFrom, resolveTokens, type ResolvedTokens } from "@/lib/tokens";
 import { CoveragePanel } from "@/components/maker/coverage-panel";
 import { FixtureNotice, SourceBadge } from "@/components/source-badge";
 import { Page, PageHead, Panel, Row, Rows, StatusMark } from "@/components/ui/primitives";
@@ -22,17 +23,19 @@ const KIND_LABEL: Record<ExecutionKind, string> = {
  * render a money value wrong by ten orders of magnitude; an em dash is the
  * honest answer.
  */
-function decimalsForAddress(address: string | null): number | undefined {
-  if (address === null) {
-    return undefined;
-  }
-  return TOKENS.find(
-    (token) => token.address.toLowerCase() === address.toLowerCase(),
-  )?.decimals;
+function decimalsForAddress(
+  tokens: ResolvedTokens,
+  address: string | null,
+): number | undefined {
+  return decimalsFrom(tokens, address);
 }
 
-function formatAmount(value: string | null, address: string | null): string {
-  const decimals = decimalsForAddress(address);
+function formatAmount(
+  tokens: ResolvedTokens,
+  value: string | null,
+  address: string | null,
+): string {
+  const decimals = decimalsForAddress(tokens, address);
   if (value === null || decimals === undefined) {
     return "—";
   }
@@ -169,6 +172,9 @@ export function DashboardClient() {
   const swapHealth = useStrategyHealth(STRATEGY_HASHES.swap);
   const growHealth = useStrategyHealth(STRATEGY_HASHES.grow);
 
+  // Amounts are formatted with the decimals of the chain actually being
+  // served, not the compile-time Arbitrum constants.
+  const tokens = resolveTokens(config.data?.data);
   const records = executions.data?.data ?? [];
   const totals = aggregateGrow(records);
   const makerProfit = totals.grossProfit - totals.performanceFee;
@@ -338,6 +344,7 @@ export function DashboardClient() {
           )
         ) : (
           <CoveragePanel
+            tokens={tokens}
             health={swapHealth.data.data}
             source={swapHealth.data.source}
             title="Vortex Swap balance coverage"
@@ -349,6 +356,7 @@ export function DashboardClient() {
           )
         ) : (
           <CoveragePanel
+            tokens={tokens}
             health={growHealth.data.data}
             source={growHealth.data.source}
             title="Vortex Grow balance coverage"
@@ -410,10 +418,10 @@ export function DashboardClient() {
                         {KIND_LABEL[record.kind]}
                       </td>
                       <td className="num py-3 pr-4 text-right text-sm text-say-2">
-                        {formatAmount(record.amountIn, record.tokenIn)}
+                        {formatAmount(tokens, record.amountIn, record.tokenIn)}
                       </td>
                       <td className="num py-3 pr-6 text-right text-sm text-say-1">
-                        {formatAmount(record.amountOut, record.tokenOut)}
+                        {formatAmount(tokens, record.amountOut, record.tokenOut)}
                       </td>
                       <td className="num py-3 pr-4 text-xs text-say-3">
                         {record.txHash === null ? (

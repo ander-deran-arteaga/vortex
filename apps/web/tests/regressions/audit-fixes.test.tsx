@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { renderApp } from "../render-app";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetWallet, setWallet, wagmiMock } from "../wallet/mock-wagmi";
@@ -38,7 +39,7 @@ describe("re-quoting is not a silent no-op", () => {
   it("re-quoting a different size replaces the quote on screen", async () => {
     const user = userEvent.setup();
     const { SwapClient } = await import("@/components/swap/swap-client");
-    render(<SwapClient />);
+    renderApp(<SwapClient />);
 
     await user.type(screen.getByLabelText("Sell"), "1");
     await user.click(screen.getByRole("button", { name: /get best execution/i }));
@@ -69,7 +70,7 @@ describe("execution never strands the user", () => {
       chainName: "Foundry",
     });
     const { SwapClient } = await import("@/components/swap/swap-client");
-    render(<SwapClient />);
+    renderApp(<SwapClient />);
 
     await user.type(screen.getByLabelText("Sell"), "1");
     await user.click(screen.getByRole("button", { name: /get best execution/i }));
@@ -91,7 +92,7 @@ describe("execution never strands the user", () => {
   it("preparing a Grow route explains instead of parking in SIMULATING", async () => {
     const user = userEvent.setup();
     const { GrowClient } = await import("@/components/grow/grow-client");
-    render(<GrowClient />);
+    renderApp(<GrowClient />);
 
     await user.click(screen.getByRole("button", { name: /scan for opportunity/i }));
     await waitFor(() => {
@@ -139,7 +140,7 @@ describe("Grow does not blame prices for a timeout", () => {
     try {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       const { GrowClient } = await import("@/components/grow/grow-client");
-      render(<GrowClient />);
+      renderApp(<GrowClient />);
 
       await user.click(screen.getByRole("button", { name: /scan for opportunity/i }));
       await waitFor(() => {

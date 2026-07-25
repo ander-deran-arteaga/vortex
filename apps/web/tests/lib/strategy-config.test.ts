@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { renderApp } from "../render-app";
 import userEvent from "@testing-library/user-event";
 import { createElement, type FunctionComponent } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -182,7 +183,7 @@ async function quoteOnce() {
   const { SwapClient } = await import("@/components/swap/swap-client");
   // This file is .ts, so the page is constructed rather than written as JSX.
   const Page: FunctionComponent = SwapClient;
-  render(createElement(Page));
+  renderApp(createElement(Page));
 
   await user.type(screen.getByLabelText("Sell"), "1");
   await user.click(screen.getByRole("button", { name: /get best execution/i }));

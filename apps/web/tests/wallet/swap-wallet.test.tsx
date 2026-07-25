@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { renderApp } from "../render-app";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -29,7 +30,7 @@ afterEach(() => {
 
 async function renderSwap() {
   const { SwapClient } = await import("@/components/swap/swap-client");
-  render(<SwapClient />);
+  renderApp(<SwapClient />);
 }
 
 describe("swap page wallet handling", () => {

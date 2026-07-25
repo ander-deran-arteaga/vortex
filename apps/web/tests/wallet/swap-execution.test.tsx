@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import { renderApp } from "../render-app";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -99,7 +100,7 @@ afterEach(() => {
 async function quoteThenExecute() {
   const user = userEvent.setup();
   const { SwapClient } = await import("@/components/swap/swap-client");
-  render(<SwapClient />);
+  renderApp(<SwapClient />);
 
   await user.type(screen.getByLabelText("Sell"), "1");
   await user.click(screen.getByRole("button", { name: /get best execution/i }));

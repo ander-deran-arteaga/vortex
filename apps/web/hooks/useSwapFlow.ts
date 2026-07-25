@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAccount } from "wagmi";
+import { useConfig } from "@/hooks/useVortexQueries";
+import { resolveTokens } from "@/lib/tokens";
 import { USDC, WBTC, type ExchangeQuoteResponse } from "@vortex/shared";
 import { ApiContractError, ApiRequestError, fetchExchangeQuote } from "@/lib/api";
 import type { DataSource } from "@/lib/api/source";
@@ -52,6 +54,10 @@ export function useSwapFlow() {
   const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
 
   const { address, chain } = useAccount();
+  // The deployed chain reports its own token addresses; the shared constants
+  // are only correct on Arbitrum One itself.
+  const config = useConfig();
+  const tokens = resolveTokens(config.data?.data);
 
   // Every in-flight quote carries a sequence number. A response whose sequence
   // is stale (the user re-quoted, or reset) is dropped instead of overwriting
@@ -95,8 +101,8 @@ export function useSwapFlow() {
           {
             chainId: chain?.id === 42161 ? 42161 : LOCAL_FORK_CHAIN_ID,
             strategyHash: STRATEGY_HASHES.swap,
-            tokenIn: WBTC.address,
-            tokenOut: USDC.address,
+            tokenIn: tokens.wbtc.address,
+            tokenOut: tokens.usdc.address,
             amountIn: amountIn.toString(),
             taker: address ?? ZERO_ADDRESS,
             slippageBps,
@@ -126,7 +132,7 @@ export function useSwapFlow() {
         });
       }
     },
-    [address, chain?.id, dispatchIfAllowed],
+    [address, chain?.id, dispatchIfAllowed, tokens.wbtc.address, tokens.usdc.address],
   );
 
   // Countdown starts only after mount, so the server never renders a
