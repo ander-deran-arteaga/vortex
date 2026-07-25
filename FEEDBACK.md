@@ -1,30 +1,80 @@
-# Uniswap Trade API — Integration Feedback
+# Uniswap Developer Platform Feedback
 
-> Skeleton — filled in during Phase 8 (polish and freeze) with concrete
-> evidence gathered while integrating.
+> Filled in continuously during integration; finalized at feature freeze
+> (Phase 8) with concrete request IDs, transaction hashes, and code links.
 
-## What we built with the API
+## Project context
 
-- Benchmarked Aqua best execution against `/quote` (classic routing, V2/V3/V4).
-- Executed fallback swaps through `/check_approval` → `/quote` → `/swap`.
-- Built the external leg of an atomic JIT compound cycle from `/swap`
-  calldata with `x-permit2-disabled: true` and `V4_NO_HOOKS`.
-- Surfaced request IDs and resulting transaction hashes in the UI.
+Vortex is a dual-intent Aqua and SwapVM liquidity system connected to a
+Uniswap v4 PermAMM and the Uniswap Developer Platform. The Trade API is
+load-bearing for venue benchmarking, fallback transaction construction, and
+(where feasible) the external leg of an atomic same-asset compound cycle.
+
+## Vortex use cases
+
+- Best-execution comparison — every Aqua quote is benchmarked against a Trade
+  API quote; the better net execution wins.
+- API-built fallback transaction — when Uniswap wins, the API builds the swap
+  the user signs and broadcasts.
+- JIT same-asset route — the external leg of Vortex Grow, requested with the
+  VortexCompounder contract as swapper and recipient.
+
+## API operations used
+
+- _TBD (documented as integrated; see `docs/uniswap-api.md`)_
 
 ## What worked well
 
 - _TBD_
 
-## Friction points
+## Integration friction
 
 - _TBD_
 
-## Requests
+## Approval and Permit2 observations
 
 - _TBD_
 
-## Evidence
+## Contract-as-swapper observations
 
-| Flow | Request ID | Tx hash |
+- _TBD (results of the mandatory spike land here)_
+
+## v4 routing observations
+
+- _TBD_
+
+## Simulation behavior
+
+- _TBD_
+
+## Error handling
+
+- _TBD_
+
+## Missing capabilities
+
+- _TBD_
+
+## Feature requests
+
+- _TBD_
+
+## Reproduction steps
+
+- _TBD_
+
+## Request identifiers
+
+| Flow | Request ID |
+| --- | --- |
+| _TBD_ | |
+
+## Transaction hashes
+
+| Flow | Chain | Tx hash |
 | --- | --- | --- |
 | _TBD_ | | |
+
+## Relevant source files
+
+- _TBD (direct links with line ranges at freeze)_
