@@ -67,8 +67,7 @@ contract VortexHookTest is Test {
 
         poolManager = IPoolManager(deployCode("PoolManager.sol:PoolManager", abi.encode(address(this))));
 
-        wbtc = new MockWBTC();
-        usdc = new MockUSDC();
+        _deployTokens();
         wbtcIsCurrency0 = address(wbtc) < address(usdc);
         (currency0, currency1) = wbtcIsCurrency0
             ? (Currency.wrap(address(wbtc)), Currency.wrap(address(usdc)))
@@ -104,6 +103,14 @@ contract VortexHookTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev Overridden by the inverted-orientation suite below. v4 sorts
+    ///      currencies by address, so which token is currency0 is a deployment
+    ///      accident — both orientations must work.
+    function _deployTokens() internal virtual {
+        wbtc = new MockWBTC();
+        usdc = new MockUSDC();
+    }
+
     // ===== harness =====
 
     /// @dev v4 encodes hook permissions in the hook's ADDRESS, so the contract
@@ -123,6 +130,7 @@ contract VortexHookTest is Test {
             feeSigner: feeSigner,
             currency0: currency0,
             currency1: currency1,
+            baseIsCurrency0: wbtcIsCurrency0,
             minSafetyFeePips: MIN_SAFETY_PIPS,
             minCommercialFeePips: MIN_COMMERCIAL_PIPS,
             maxCommercialFeePips: MAX_COMMERCIAL_PIPS,
@@ -137,12 +145,12 @@ contract VortexHookTest is Test {
     }
 
     /// @dev sqrt(price) * 2^96 where price is currency1-per-currency0 in raw units.
+    ///      WBTC has 8 decimals, USDC 6, and v4 sorts currencies by address, so
+    ///      the orientation must be resolved rather than assumed.
     function _oracleSqrtPrice() internal view returns (uint160) {
-        // WBTC(8) / USDC(6): 1 WBTC = 100_000 USDC =>
-        //   1e8 wbtc-units : 100_000e6 usdc-units  =>  price = 1e12/1e8... resolve generically.
         uint256 priceE18 = wbtcIsCurrency0
-            ? MID / 1e2 // usdc units per wbtc unit, 1e18-scaled: 100_000e6/1e8 = 1e3 → 1e21? see below
-            : 1e36 / (MID / 1e2);
+            ? MID / 1e2 // usdc-units per wbtc-unit, 1e18-scaled
+            : 1e36 / (MID / 1e2); // inverted: wbtc-units per usdc-unit
         return _encodeSqrtPrice(priceE18);
     }
 
@@ -572,4 +580,39 @@ contract VortexHookTest is Test {
 
 interface IERC20Like {
     function balanceOf(address account) external view returns (uint256);
+}
+
+/// @notice Re-runs the entire hook suite with the token ordering FLIPPED.
+/// @dev v4 sorts currencies by address, so whether WBTC or USDC is currency0
+///      is a deployment accident. The hook must invert the oracle price when
+///      the base asset is currency1. A real deployment hit exactly this and
+///      reverted `VortexPoolDeviationTooLarge(9999)` while the original suite
+///      was green — one orientation was never exercised. This subclass forces
+///      the other one so the gap cannot reopen.
+contract VortexHookInvertedOrientationTest is VortexHookTest {
+    function _deployTokens() internal override {
+        // Place the mocks at chosen addresses to force the opposite ordering
+        // from the default deployment.
+        address lowSlot = address(uint160(0x1111 << 100));
+        address highSlot = address(uint160(0x9999 << 100));
+
+        MockWBTC naturalWbtc = new MockWBTC();
+        MockUSDC naturalUsdc = new MockUSDC();
+        bool naturalWbtcFirst = address(naturalWbtc) < address(naturalUsdc);
+
+        // If WBTC would naturally be currency0, force it to be currency1 here.
+        (address wbtcSlot, address usdcSlot) =
+            naturalWbtcFirst ? (highSlot, lowSlot) : (lowSlot, highSlot);
+
+        deployCodeTo("MockWBTC.sol:MockWBTC", "", wbtcSlot);
+        deployCodeTo("MockUSDC.sol:MockUSDC", "", usdcSlot);
+
+        wbtc = MockWBTC(wbtcSlot);
+        usdc = MockUSDC(usdcSlot);
+
+        require(
+            (address(wbtc) < address(usdc)) != naturalWbtcFirst,
+            "orientation was not actually flipped"
+        );
+    }
 }

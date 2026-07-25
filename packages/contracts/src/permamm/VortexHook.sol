@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IHooks } from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -57,6 +58,10 @@ contract VortexHook is IHooks, EIP712 {
 
     Currency public immutable CURRENCY0;
     Currency public immutable CURRENCY1;
+    /// @notice True when the oracle's BASE asset (WBTC) is currency0. v4 sorts
+    ///         currencies by address, so which side is base is a deployment
+    ///         accident — the oracle price must be inverted when it is not.
+    bool public immutable BASE_IS_CURRENCY0;
 
     mapping(address swapper => mapping(uint64 nonce => bool used)) public usedFeeNonces;
 
@@ -98,6 +103,7 @@ contract VortexHook is IHooks, EIP712 {
         address feeSigner;
         Currency currency0;
         Currency currency1;
+        bool baseIsCurrency0;
         uint24 minSafetyFeePips;
         uint24 minCommercialFeePips;
         uint24 maxCommercialFeePips;
@@ -127,6 +133,7 @@ contract VortexHook is IHooks, EIP712 {
         FEE_SIGNER = config.feeSigner;
         CURRENCY0 = config.currency0;
         CURRENCY1 = config.currency1;
+        BASE_IS_CURRENCY0 = config.baseIsCurrency0;
         MIN_SAFETY_FEE_PIPS = config.minSafetyFeePips;
         MIN_COMMERCIAL_FEE_PIPS = config.minCommercialFeePips;
         MAX_COMMERCIAL_FEE_PIPS = config.maxCommercialFeePips;
@@ -403,17 +410,20 @@ contract VortexHook is IHooks, EIP712 {
         return (p * p) >> 192 == 0 ? (p * p * 1e18) >> 192 : ((p * p) >> 192) * 1e18;
     }
 
-    /// @dev The oracle quotes USDC per WBTC in 1e18. The pool quotes currency1
-    ///      per currency0 in raw token units. Reconcile the decimal gap so the
-    ///      comparison is apples-to-apples.
+    /// @dev The oracle quotes QUOTE per BASE (USDC per WBTC) at 1e18. The pool
+    ///      quotes currency1 per currency0 in raw token units. Two adjustments
+    ///      are needed: invert when the base is currency1 (v4 sorts by address,
+    ///      so that happens roughly half the time), and reconcile the decimals.
     function _oracleMidInPoolScale(uint256 oracleMidE18) private view returns (uint256) {
-        uint8 decimals0 = _decimals(CURRENCY0);
-        uint8 decimals1 = _decimals(CURRENCY1);
-        // pool price is (token1 units per token0 unit) * 1e18
-        if (decimals0 >= decimals1) {
-            return oracleMidE18 / (10 ** (decimals0 - decimals1));
-        }
-        return oracleMidE18 * (10 ** (decimals1 - decimals0));
+        uint256 decimalScale0 = 10 ** _decimals(CURRENCY0);
+        uint256 decimalScale1 = 10 ** _decimals(CURRENCY1);
+
+        uint256 priceE18 = BASE_IS_CURRENCY0
+            ? oracleMidE18
+            // currency0 is the quote asset, so the pool's price is 1 / oracle.
+            : Math.mulDiv(1e18, 1e18, oracleMidE18);
+
+        return Math.mulDiv(priceE18, decimalScale1, decimalScale0);
     }
 
     function _decimals(Currency currency) private view returns (uint8) {
