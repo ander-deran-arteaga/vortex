@@ -114,7 +114,7 @@ export function vortexPermFeeAuthorizationDomain(
 // ── Vortex Grow — signed compound route ────────────────────────────
 // Consumed by VortexCompounder. Binds strategy, opportunity, direction,
 // principal, bridge amount, spend cap, minimum final asset, external target
-// + exact calldata hash, PermAMM hook-data hash, deadline, and nonce.
+// + exact calldata hash, Vortex PermAMM hook-data hash, deadline, and nonce.
 // Even a compromised signer cannot escape the target allowlist, the final
 // balance check, or replay protection — those are enforced onchain.
 

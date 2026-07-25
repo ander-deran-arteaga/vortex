@@ -52,9 +52,9 @@ in the MVP.
    fork; request IDs + tx hashes stored.
 4. **Best-execution frontend** — maker onboarding, side-by-side comparison,
    both execution paths from the UI.
-5. **v4 PermAMM** — dynamic-fee pool; signed fee authorization changes a real
-   swap's fee; unauthorized liquidity reverts; deviation guard works.
-6. **Deterministic Grow** — atomic pull → PermAMM leg → stale-venue leg →
+5. **Vortex PermAMM** — dynamic-fee pool; signed fee authorization changes a
+   real swap's fee; unauthorized liquidity reverts; deviation guard works.
+6. **Deterministic Grow** — atomic pull → Vortex PermAMM leg → stale-venue leg →
    profit check → fee from profit only → push back; failure fully reverts.
 7. **API-powered Grow leg** — only after the contract-as-swapper spike; the
    compounder executes an API-built external leg under signed-route
@@ -83,5 +83,5 @@ calldata, a live API for local tests, or a solver network; anything that
 cannot be explained in one minute or has no testable invariant.
 
 Priority: Aqua settlement → SwapVM Swap → transfer tests → Uniswap API
-transaction → best-execution UI → PermAMM → deterministic Grow → API Grow →
-polish.
+transaction → best-execution UI → Vortex PermAMM → deterministic Grow →
+API Grow → polish.

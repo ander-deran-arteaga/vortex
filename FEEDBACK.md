@@ -5,15 +5,16 @@
 
 ## Project context
 
-Vortex is a dual-intent Aqua and SwapVM liquidity system connected to a
-Uniswap v4 PermAMM and the Uniswap Developer Platform. The Trade API is
+Vortex is a dual-intent Aqua and SwapVM liquidity system connected to the
+Vortex PermAMM (a Uniswap v4 dynamic-fee pool) and the Uniswap Developer
+Platform. The Trade API is
 load-bearing for venue benchmarking, fallback transaction construction, and
 (where feasible) the external leg of an atomic same-asset compound cycle.
 
 ## Vortex use cases
 
-- Best-execution comparison — every Aqua quote is benchmarked against a Trade
-  API quote; the better net execution wins.
+- Vortex Swap best-execution comparison — every Aqua quote is benchmarked
+  against a Trade API quote; the better net execution wins.
 - API-built fallback transaction — when Uniswap wins, the API builds the swap
   the user signs and broadcasts.
 - JIT same-asset route — the external leg of Vortex Grow, requested with the

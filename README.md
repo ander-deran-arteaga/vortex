@@ -1,7 +1,8 @@
 # Vortex
 
-Vortex is a dual-intent Aqua and SwapVM liquidity system connected to a
-Uniswap v4 PermAMM and the Uniswap Developer Platform: takers get the best
+Vortex is a dual-intent Aqua and SwapVM liquidity system connected to the
+Vortex PermAMM (a Uniswap v4 dynamic-fee pool) and the Uniswap Developer
+Platform: takers get the best
 safe execution across Aqua and Uniswap, and makers can atomically compound an
 asset through profitable same-chain arbitrage.
 

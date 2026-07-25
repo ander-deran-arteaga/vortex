@@ -2,7 +2,7 @@
   "name": "vortex",
   "private": true,
   "version": "0.1.0",
-  "description": "Vortex — dual-intent Aqua and SwapVM liquidity system with a Uniswap v4 PermAMM and Uniswap Developer Platform integration",
+  "description": "Vortex — dual-intent Aqua and SwapVM liquidity system with the Vortex PermAMM (Uniswap v4) and Uniswap Developer Platform integration",
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "node": ">=22"

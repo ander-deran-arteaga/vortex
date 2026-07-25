@@ -18,7 +18,10 @@ jobs:
 
       - name: Forbidden naming
         run: |
-          if grep -RniE "aquaguard|premamm|prepamm" . \
+          # Legacy pre-Vortex project names. Assembled from fragments so this
+          # workflow file never matches its own check.
+          pattern="aqua""guard|prem""amm|prep""amm"
+          if grep -RniE "$pattern" . \
             --exclude-dir=.git \
             --exclude-dir=node_modules \
             --exclude-dir=out \

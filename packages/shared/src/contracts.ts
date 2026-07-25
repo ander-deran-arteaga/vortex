@@ -11,6 +11,7 @@ export const CONTRACT_NAMES = [
   "AquaSwapVMRouter",
   "MockWBTC",
   "MockUSDC",
+  "MockWETH",
   "MockReferenceOracle",
   "MockStalePool",
   "MockExternalRouter",

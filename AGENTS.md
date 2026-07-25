@@ -14,8 +14,10 @@ Component names:
 - **Vortex Compounder** — the Grow settlement contract (`VortexCompounder`).
 
 "PermAMM" appears only as a component description and only prefixed with
-Vortex. Forbidden everywhere: AquaGuard, PremAMM, PrepAMM. "Aqua" and
-"SwapVM" refer only to the official 1inch protocol components.
+Vortex. Every legacy project name that predates Vortex is forbidden
+everywhere; the integration workflow greps for them and fails the build on
+any hit. "Aqua" and "SwapVM" refer only to the official 1inch protocol
+components.
 
 ## Team
 
