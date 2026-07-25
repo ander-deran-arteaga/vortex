@@ -8,6 +8,8 @@ import {
 } from "@vortex/shared";
 import type { Address, Hex } from "viem";
 
+import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
+
 import type {
   AquaQuote,
   AquaQuoteSource,
@@ -42,6 +44,12 @@ export interface FixtureAquaConfig {
   baseToken: FixtureToken;
   quoteToken: FixtureToken;
   gasUnits: bigint;
+  /** Address reported as the maker in strategy health. */
+  maker: Address;
+  /** Only this hash resolves; any other is reported as not found. */
+  knownStrategyHash: Hex | null;
+  baseInventory: bigint;
+  quoteInventory: bigint;
 }
 
 export const DEFAULT_FIXTURE_AQUA_CONFIG: FixtureAquaConfig = {
@@ -57,6 +65,10 @@ export const DEFAULT_FIXTURE_AQUA_CONFIG: FixtureAquaConfig = {
   baseToken: { address: WBTC.address, decimals: WBTC.decimals },
   quoteToken: { address: USDC.address, decimals: USDC.decimals },
   gasUnits: AQUA_SWAP_GAS_UNITS,
+  maker: "0x2222222222222222222222222222222222222222",
+  knownStrategyHash: null,
+  baseInventory: 100_000_000n, // 1 WBTC
+  quoteInventory: 65_000_000_000n, // 65_000 USDC
 };
 
 /** 8 bps all-in — beats a 30 bps AMM route at the same mid. */
@@ -114,6 +126,48 @@ export function createFixtureAquaQuoteSource(
 
   return {
     kind: "fixture",
+
+    strategyHealth(strategyHash: Hex): Promise<StrategyHealth | null> {
+      // A fixture knows exactly one strategy. Anything else is genuinely
+      // absent, which is what lets the route answer STRATEGY_NOT_FOUND
+      // instead of inventing coverage for a hash nobody shipped.
+      if (
+        config.knownStrategyHash &&
+        strategyHash.toLowerCase() !== config.knownStrategyHash.toLowerCase()
+      ) {
+        return Promise.resolve(null);
+      }
+
+      const token = (
+        t: FixtureToken,
+        symbol: string,
+        balance: bigint,
+      ): StrategyTokenHealth => {
+        const executable = bpsOf(balance, config.makerCoverageBps);
+        return {
+          address: t.address,
+          symbol,
+          virtualBalance: balance.toString(),
+          actualBalance: executable.toString(),
+          aquaAllowance: executable.toString(),
+          executableBalance: executable.toString(),
+        };
+      };
+
+      return Promise.resolve({
+        strategyHash,
+        maker: config.maker,
+        active: config.active,
+        solvent: config.solvent,
+        coverageBps: config.makerCoverageBps,
+        tokens: [
+          token(config.baseToken, "WBTC", config.baseInventory),
+          token(config.quoteToken, "USDC", config.quoteInventory),
+        ],
+        lastUpdatedBlock: null,
+      });
+    },
+
     quote(params: QuoteRequestParams & { strategyHash: Hex }): Promise<AquaQuote> {
       const scaffold = {
         strategyHash: params.strategyHash,

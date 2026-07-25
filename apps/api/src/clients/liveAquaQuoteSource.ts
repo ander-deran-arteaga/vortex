@@ -1,6 +1,8 @@
 import { minOutAfterSlippage } from "@vortex/shared";
 import { decodeErrorResult, type Address, type Hex, type PublicClient } from "viem";
 
+import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
+
 import type {
   AquaQuote,
   AquaQuoteSource,
@@ -151,6 +153,61 @@ export function createLiveAquaQuoteSource(
 
   return {
     kind: "live",
+
+    async strategyHealth(strategyHash: Hex): Promise<StrategyHealth | null> {
+      let order: AquaOrder;
+      try {
+        order = await config.resolveOrder(strategyHash);
+      } catch {
+        // No order for this hash means no such strategy was ever shipped.
+        return null;
+      }
+
+      const health = await config.client.readContract({
+        address: config.lensAddress,
+        abi: vortexAquaLensAbi,
+        functionName: "strategyHealth",
+        args: [
+          order.maker,
+          strategyHash,
+          config.baseToken,
+          config.quoteToken,
+          config.oracleAddress,
+        ],
+      });
+
+      const token = (
+        address: Address,
+        symbol: string,
+        entry: {
+          virtualBalance: bigint;
+          actualBalance: bigint;
+          aquaAllowance: bigint;
+          executableBalance: bigint;
+        },
+      ): StrategyTokenHealth => ({
+        address,
+        symbol,
+        virtualBalance: entry.virtualBalance.toString(),
+        actualBalance: entry.actualBalance.toString(),
+        aquaAllowance: entry.aquaAllowance.toString(),
+        executableBalance: entry.executableBalance.toString(),
+      });
+
+      return {
+        strategyHash,
+        maker: order.maker,
+        active: health.active,
+        solvent: health.solvent,
+        coverageBps: clampBps(health.coverageBps),
+        tokens: [
+          token(config.baseToken, "WBTC", health.base),
+          token(config.quoteToken, "USDC", health.quote),
+        ],
+        lastUpdatedBlock: null,
+      };
+    },
+
     async quote(
       params: QuoteRequestParams & { strategyHash: Hex },
     ): Promise<AquaQuote> {

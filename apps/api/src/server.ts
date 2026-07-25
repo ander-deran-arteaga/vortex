@@ -14,6 +14,7 @@ import { registerConfigRoutes } from "./routes/config";
 import { registerExecutionRoutes } from "./routes/executions";
 import { registerHealthRoutes } from "./routes/health";
 import { registerQuoteRoutes } from "./routes/quotes";
+import { registerStrategyRoutes } from "./routes/strategies";
 import { registerTransactionRoutes } from "./routes/transactions";
 
 /** One sweep per TTL window is enough to bound the map. */
@@ -84,6 +85,7 @@ export function buildServer(
   registerHealthRoutes(app, ctx);
   registerConfigRoutes(app, ctx);
   registerQuoteRoutes(app, ctx);
+  registerStrategyRoutes(app, ctx);
   registerTransactionRoutes(app, ctx);
   registerExecutionRoutes(app, ctx);
 

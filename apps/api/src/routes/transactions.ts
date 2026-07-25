@@ -36,7 +36,7 @@ export function registerTransactionRoutes(
     if (!result.ok) {
       return reply.status(SESSION_ERROR_STATUS[result.reason]).send({
         error: {
-          code: `QUOTE_SESSION_${result.reason}`,
+          code: `SESSION_${result.reason}`,
           message: SESSION_ERROR_MESSAGE[result.reason],
         },
       });

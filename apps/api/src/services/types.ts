@@ -1,3 +1,4 @@
+import type { StrategyHealth } from "@vortex/shared";
 import type { Address, Hex } from "viem";
 
 /**
@@ -63,4 +64,10 @@ export interface QuoteRequestParams {
 export interface AquaQuoteSource {
   readonly kind: "live" | "fixture";
   quote(params: QuoteRequestParams & { strategyHash: Hex }): Promise<AquaQuote>;
+  /**
+   * Resolves a strategy's coverage, or null when no such strategy exists.
+   * Null is a genuine "not found", distinct from a strategy that exists but
+   * cannot currently settle — the route maps the two to different codes.
+   */
+  strategyHealth(strategyHash: Hex): Promise<StrategyHealth | null>;
 }

@@ -335,7 +335,7 @@ describe(`POST ${API_ROUTES.transactionsUniswap}`, () => {
 
     expect(replay.statusCode).toBe(409);
     expect(zApiError.parse(replay.json()).error.code).toBe(
-      "QUOTE_SESSION_ALREADY_USED",
+      "SESSION_ALREADY_USED",
     );
   });
 
@@ -345,7 +345,7 @@ describe(`POST ${API_ROUTES.transactionsUniswap}`, () => {
 
     expect(res.statusCode).toBe(404);
     expect(zApiError.parse(res.json()).error.code).toBe(
-      "QUOTE_SESSION_NOT_FOUND",
+      "SESSION_NOT_FOUND",
     );
   });
 
@@ -434,7 +434,7 @@ describe("quote session lifecycle", () => {
     });
 
     expect(res.statusCode).toBe(410);
-    expect(zApiError.parse(res.json()).error.code).toBe("QUOTE_SESSION_EXPIRED");
+    expect(zApiError.parse(res.json()).error.code).toBe("SESSION_EXPIRED");
   });
 });
 

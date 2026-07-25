@@ -22,6 +22,7 @@ const liveLikeAquaSource: AquaQuoteSource = {
   quote: async () => {
     throw new Error("not used by config route tests");
   },
+  strategyHealth: async () => null,
 };
 
 const deploymentContracts = (chainId: number): Record<string, string> =>
