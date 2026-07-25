@@ -2,21 +2,19 @@
 
 ## Current gate
 
-Phases 0 through 6 have all passed. Phase 7 is deferred until the Vortex Swap
-execution path works end to end.
+Phases 0 through 6 have passed. Vortex Swap now executes end to end through
+official Aqua and SwapVM: a quote from the live pricing contracts, a built
+transaction, and a settled swap moving real WBTC and USDC on the local fork.
+Phase 7 remains deferred behind demo completeness.
 
-Verified green at `06b2591`: **514 tests** — contracts 148, shared 25, api 206
-(plus 1 opt-in fork test), web 135. Both the commit-policy and architecture
-guards pass; 106 commits policy-clean.
+Verified green at `4ddefd8`: **555 tests** — contracts 150, shared 25, api 229
+(plus 5 skipped), web 151. Both the commit-policy and architecture guards pass;
+117 commits policy-clean.
 
-**Open gap, and it is the critical path.** `POST /api/v1/transactions/aqua` is
-declared in the shared route table but still not registered, so the Aqua
-settlement path has no transaction builder; and the API still quotes Aqua from
-the fixture source rather than the deployed pricing contracts. Until both are
-wired, the winning venue has no builder and the venue with a builder never
-wins. Everything else is ready: settlement is proven by 33 Vortex Swap tests
-moving real ERC-20 balances, the pricing contracts are deployed and quotable on
-31337, and a reproducible Uniswap-wins scenario exists.
+Remaining to a complete submission: browser-side execution wiring, the three
+Vortex Grow endpoints that the demo's compounding scene depends on, and the
+Phase 8 evidence work. Seven of the fourteen declared API routes are
+registered; the resolver endpoints are deliberately last and may be cut.
 
 ## Contracts
 - Current task: Phase 6 close-out — a reentrancy test against a malicious
