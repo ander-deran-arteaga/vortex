@@ -1,5 +1,8 @@
 [profile.default]
-solc = "0.8.30"
+# No explicit `solc` pin: an exact pin forces ONE version on every compilation
+# unit, which makes Uniswap v4-core (pragma 0.8.26 exact) unbuildable alongside
+# aqua/swap-vm (0.8.30 exact). Pragmas + the restrictions below resolve both.
+# See docs/dependencies.md.
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 1_000
@@ -9,12 +12,53 @@ test = "test"
 libs = ["node_modules"]
 fs_permissions = [{ access = "read-write", path = "../../deployments" }]
 
+[[profile.default.additional_compiler_profiles]]
+name = "v4core"
+solc = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+# Legacy codegen: v4-core's Pool.sol hits stack-too-deep under via-IR here.
+optimizer_runs = 800
+via_ir = false
+
+[[profile.default.compilation_restrictions]]
+# ONLY PoolManager.sol is `pragma 0.8.26` exact — every other v4-core file is
+# ^0.8.x and belongs to the 0.8.30 unit alongside our hook. Restricting the
+# whole package instead would drag those interfaces into the 0.8.26 unit and
+# deadlock the settings. via_ir is off here because v4's Pool.sol hits
+# stack-too-deep under via-IR at these optimizer settings; legacy codegen is
+# what upstream effectively relies on for this path.
+paths = "node_modules/@uniswap/v4-core/src/PoolManager.sol"
+version = "0.8.26"
+via_ir = false
+
 [profile.ci]
-solc = "0.8.30"
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 1_000
 via_ir = true
+libs = ["node_modules"]
+fs_permissions = [{ access = "read-write", path = "../../deployments" }]
+
+[[profile.ci.additional_compiler_profiles]]
+name = "v4core"
+solc = "0.8.26"
+evm_version = "cancun"
+optimizer = true
+# Legacy codegen: v4-core's Pool.sol hits stack-too-deep under via-IR here.
+optimizer_runs = 800
+via_ir = false
+
+[[profile.ci.compilation_restrictions]]
+# ONLY PoolManager.sol is `pragma 0.8.26` exact — every other v4-core file is
+# ^0.8.x and belongs to the 0.8.30 unit alongside our hook. Restricting the
+# whole package instead would drag those interfaces into the 0.8.26 unit and
+# deadlock the settings. via_ir is off here because v4's Pool.sol hits
+# stack-too-deep under via-IR at these optimizer settings; legacy codegen is
+# what upstream effectively relies on for this path.
+paths = "node_modules/@uniswap/v4-core/src/PoolManager.sol"
+version = "0.8.26"
+via_ir = false
 
 [fmt]
 single_line_statement_blocks = "multi"
