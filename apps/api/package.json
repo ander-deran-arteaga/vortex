@@ -14,6 +14,7 @@
     "@fastify/cors": "^10.0.0",
     "@vortex/shared": "workspace:*",
     "fastify": "^5.0.0",
+    "viem": "^2.55.8",
     "zod": "^3.25.76"
   },
   "devDependencies": {
