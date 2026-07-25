@@ -540,6 +540,112 @@ contract VortexGrowTest is Test {
         assertEq(_virtualAsset(), virtualBefore, "maker untouched despite a valid signature");
     }
 
+    /// @notice The reverse leg order: buy the bridge asset externally first,
+    ///         then convert back on the PermAMM. Declared supported by the
+    ///         validator, so it must be exercised rather than assumed.
+    function test_externalThenVortexDirectionCompounds() public {
+        // Sell WBTC externally ABOVE the pool's mark (105k vs 100k), then buy
+        // it back on the pool — the mirror image of the other direction.
+        externalRouter.setRate(address(wbtc), address(usdc), _wbtcToUsdcRate(105_000));
+        usdc.mint(address(this), 100_000_000e6);
+        usdc.approve(address(externalRouter), type(uint256).max);
+        externalRouter.fund(address(usdc), 100_000_000e6);
+
+        uint128 assetToSell = 0.9e8;
+        bytes memory externalCalldata = abi.encodeCall(
+            MockExternalRouter.swap, (address(wbtc), address(usdc), assetToSell, address(compounder))
+        );
+        // Leg 2 is exact-input over whatever the external leg produced, so the
+        // hook authorization binds that leg's own amount.
+        bytes memory permHookData = _permHookDataFor(
+            address(usdc), address(wbtc), !wbtcIsCurrency0, -int256(uint256(assetToSell) * 105_000 / 1e2)
+        );
+
+        VortexCompoundRoute memory route = VortexCompoundRoute({
+            strategyHash: strategyHash,
+            opportunityId: keccak256("opp-reverse"),
+            direction: uint8(VortexGrowDirection.EXTERNAL_THEN_VORTEX),
+            principalAmount: PRINCIPAL,
+            bridgeAmount: uint128(uint256(assetToSell) * 105_000 / 1e2),
+            maxAssetSpent: assetToSell,
+            minFinalAsset: 0,
+            externalTarget: address(externalRouter),
+            externalValue: 0,
+            externalCalldataHash: keccak256(externalCalldata),
+            permHookDataHash: keccak256(permHookData),
+            deadline: uint40(block.timestamp + 10 minutes),
+            nonce: 4242
+        });
+
+        VortexCompounder.ExecuteParams memory params = VortexCompounder.ExecuteParams({
+            strategy: strategy,
+            route: route,
+            routeSignature: _signRoute(route),
+            permHookData: permHookData,
+            externalCalldata: externalCalldata,
+            poolKey: poolKey,
+            assetIsCurrency0: wbtcIsCurrency0
+        });
+
+        uint256 virtualBefore = _virtualAsset();
+        (uint256 principal, uint256 makerReturn,,) = _executeAndReadAccounting(params);
+
+        assertEq(principal, PRINCIPAL);
+        assertGt(makerReturn, principal, "reverse direction also compounds");
+        assertEq(_virtualAsset() - virtualBefore, makerReturn - principal);
+        assertEq(usdc.balanceOf(address(compounder)), 0, "no bridge dust either way");
+    }
+
+    /// @dev USDC units per satoshi, 1e18-scaled, from a whole-USDC WBTC price.
+    function _wbtcToUsdcRate(uint256 wholeUsdcPerWbtc) internal pure returns (uint256) {
+        return (wholeUsdcPerWbtc * 1e6 * 1e18) / 1e8;
+    }
+
+    /// @dev A fee authorization for an arbitrary leg, rather than the default
+    ///      asset -> bridge exact-output one.
+    function _permHookDataFor(
+        address tokenIn,
+        address tokenOut,
+        bool zeroForOne,
+        int256 amountSpecified
+    )
+        internal
+        returns (bytes memory)
+    {
+        IVortexReferenceOracle.PriceData memory p = oracle.latestPrice();
+        VortexPermFeeAuthorization memory auth = VortexPermFeeAuthorization({
+            poolId: PoolId.unwrap(poolKey.toId()),
+            quoteId: keccak256(abi.encode("grow-leg", nonceCounter)),
+            oracleSnapshotHash: keccak256(
+                abi.encode(p.midPriceE18, p.bidPriceE18, p.askPriceE18, p.updatedAt)
+            ),
+            swapper: address(compounder),
+            tokenIn: tokenIn,
+            tokenOut: tokenOut,
+            zeroForOne: zeroForOne,
+            amountSpecified: amountSpecified,
+            sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1,
+            commercialFeePips: 1_000,
+            deadline: uint40(block.timestamp + 10 minutes),
+            nonce: nonceCounter++
+        });
+
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes("Vortex PermAMM")),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(hook)
+            )
+        );
+        bytes32 digest = keccak256(
+            abi.encodePacked("\x19\x01", domainSeparator, VortexFeeAuthorizationLib.hashStruct(auth))
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(feeSignerKey, digest);
+        return abi.encode(auth, abi.encodePacked(r, s, v));
+    }
+
     // ===== event helper =====
 
     /// @dev Executes and returns the accounting the contract itself emitted,

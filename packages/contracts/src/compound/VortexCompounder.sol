@@ -115,7 +115,7 @@ contract VortexCompounder is AquaApp, EIP712 {
             params.strategy.maker, strategyHash, params.strategy.asset, params.route.principalAmount, address(this)
         );
 
-        _runCycle(params, asset, bridge, assetBefore);
+        _runCycle(params, asset, bridge);
 
         uint256 assetProduced = asset.balanceOf(address(this)) - assetBefore;
         uint256 required = VortexRouteValidator.requiredFinalAsset(params.strategy, params.route);
@@ -155,14 +155,7 @@ contract VortexCompounder is AquaApp, EIP712 {
         );
     }
 
-    function _runCycle(
-        ExecuteParams calldata params,
-        IERC20 asset,
-        IERC20 bridge,
-        uint256 assetBefore
-    )
-        private
-    {
+    function _runCycle(ExecuteParams calldata params, IERC20 asset, IERC20 bridge) private {
         if (params.route.direction == uint8(VortexGrowDirection.VORTEX_THEN_EXTERNAL)) {
             // Leg 1: asset → EXACT bridge amount on the PermAMM, so the
             // external leg's calldata (built offchain for a fixed input) is
@@ -186,9 +179,6 @@ contract VortexCompounder is AquaApp, EIP712 {
             // Leg 2: the bridge proceeds go back to asset on the PermAMM.
             _vortexExactInput(params, bridge);
         }
-        // Silence unused-variable warnings in one branch while keeping the
-        // parameter meaningful for callers reading the signature.
-        assetBefore;
     }
 
     /// @dev PermAMM leg producing an exact bridge amount.
