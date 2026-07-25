@@ -2,19 +2,21 @@
 
 ## Current gate
 
-Phases 0 through 6 have passed. Vortex Swap now executes end to end through
-official Aqua and SwapVM: a quote from the live pricing contracts, a built
-transaction, and a settled swap moving real WBTC and USDC on the local fork.
-Phase 7 remains deferred behind demo completeness.
+Phases 0 through 6 have passed. The full Vortex Swap path has now been verified
+end to end against a live local chain: a quote priced by the deployed contracts,
+a transaction built by the API, and that exact calldata simulated successfully
+against the deployed router, returning the quoted amount and clearing the
+enforced minimum. Replay is rejected.
 
-Verified green at `4ddefd8`: **555 tests** — contracts 150, shared 25, api 229
-(plus 5 skipped), web 151. Both the commit-policy and architecture guards pass;
-117 commits policy-clean.
+Verified green at `c854f78`: **561 tests** — contracts 150, shared 25, api 229
+(plus 5 skipped), web 157. Both the commit-policy and architecture guards pass;
+121 commits policy-clean.
 
-Remaining to a complete submission: browser-side execution wiring, the three
-Vortex Grow endpoints that the demo's compounding scene depends on, and the
-Phase 8 evidence work. Seven of the fourteen declared API routes are
-registered; the resolver endpoints are deliberately last and may be cut.
+**Demo configuration warning.** The API defaults to chain 42161, where no Aqua
+strategy is deployed, so it answers `AQUA_EXECUTION_UNAVAILABLE`. The local
+stack runs as chain 31337. Run the API with `CHAIN_ID=31337` against the local
+deployment or the demo cannot execute a swap. Ten of the fourteen declared API
+routes are registered; the resolver endpoints are deliberately last.
 
 ## Contracts
 - Current task: Phase 6 close-out — a reentrancy test against a malicious
