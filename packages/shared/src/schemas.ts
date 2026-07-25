@@ -35,7 +35,17 @@ export const zExchangeQuoteRequest = z.object({
 });
 export type ExchangeQuoteRequest = z.infer<typeof zExchangeQuoteRequest>;
 
+/**
+ * Provenance of a displayed quote. Required on every venue comparison so the
+ * UI can never render a simulated number as if it were live — presenting mock
+ * data as live data is a blocked implementation (security rules, §21).
+ * There is deliberately no default: a caller must state which it is.
+ */
+export const zQuoteSource = z.enum(["live", "fixture"]);
+export type QuoteSource = z.infer<typeof zQuoteSource>;
+
 export const zAquaComparison = z.object({
+  source: zQuoteSource,
   amountOut: zAmount,
   minimumAmountOut: zAmount,
   estimatedGasUsd: z.string(),
@@ -48,6 +58,7 @@ export const zAquaComparison = z.object({
 export type AquaComparison = z.infer<typeof zAquaComparison>;
 
 export const zUniswapComparison = z.object({
+  source: zQuoteSource,
   amountOut: zAmount,
   minimumAmountOut: zAmount,
   estimatedGasUsd: z.string(),

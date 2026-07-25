@@ -61,6 +61,7 @@ describe("zExchangeQuoteResponse", () => {
       expiresAt: 1_753_000_000,
       comparison: {
         aqua: {
+          source: "live",
           amountOut: "99000000",
           minimumAmountOut: "98700000",
           estimatedGasUsd: "0.12",
@@ -80,6 +81,35 @@ describe("zExchangeQuoteResponse", () => {
       },
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("rejects a comparison that does not declare its provenance", () => {
+    const parsed = zExchangeQuoteResponse.safeParse({
+      quoteSessionId: "quote_1",
+      selectedVenue: "AQUA",
+      expiresAt: 1_753_000_000_000,
+      comparison: {
+        aqua: {
+          // no `source` — a simulated quote could masquerade as live
+          amountOut: "99000000",
+          minimumAmountOut: "98700000",
+          estimatedGasUsd: "0.12",
+          netAmountOut: "98650000",
+          safetyFeeBps: 3,
+          commercialFeeBps: 7,
+          inventoryAdjustmentBps: -1.5,
+          makerCoverageBps: 10_000,
+        },
+        uniswap: null,
+      },
+      execution: {
+        kind: "AQUA_SWAPVM",
+        order: {},
+        amount: "100000000",
+        takerTraitsAndData: "0xdeadbeef",
+      },
+    });
+    expect(parsed.success).toBe(false);
   });
 
   it("rejects an execution kind mismatch", () => {
