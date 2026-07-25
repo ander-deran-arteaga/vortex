@@ -61,55 +61,55 @@ const phases = [
     phase: 0,
     name: "Repo skeleton",
     exit: "Web and API boot; every route renders a structured placeholder.",
-    active: true,
+    status: "passed",
   },
   {
     phase: 1,
     name: "Official Aqua token transfer",
     exit: "A real Aqua token transfer settles end to end.",
-    active: false,
+    status: "passed",
   },
   {
     phase: 2,
     name: "SwapVM best execution",
     exit: "A SwapVM strategy serves inventory-aware quotes and settles an exact-input swap.",
-    active: false,
+    status: "active",
   },
   {
     phase: 3,
     name: "Backend comparison router",
     exit: "The API prices both venues and selects the higher net output.",
-    active: false,
+    status: "active",
   },
   {
     phase: 4,
     name: "Best-execution frontend",
-    exit: "Maker, Swap, and Dashboard pages drive the comparison flow with live data.",
-    active: false,
+    exit: "Maker, Swap, Grow and Dashboard pages drive the real flows; fixture data is labeled until the API is live.",
+    status: "active",
   },
   {
     phase: 5,
     name: "Vortex PermAMM v4 mock",
     exit: "The v4 pool quotes with a dynamic fee above the immutable safety floor against the mock oracle.",
-    active: false,
+    status: "pending",
   },
   {
     phase: 6,
     name: "Grow mock route",
     exit: "A Grow cycle executes atomically against a mock route and reverts unless final WBTC exceeds initial.",
-    active: false,
+    status: "pending",
   },
   {
     phase: 7,
     name: "Uniswap API external leg",
     exit: "The Grow external leg executes an exact Uniswap API-built route.",
-    active: false,
+    status: "pending",
   },
   {
     phase: 8,
     name: "Polish and freeze",
     exit: "The demo timeline runs the full judge sequence; copy and interfaces are frozen.",
-    active: false,
+    status: "pending",
   },
 ] as const;
 
@@ -125,7 +125,7 @@ export default function ArchitecturePage() {
         overline="Vortex"
         title="Architecture"
         description="Programmable market-making on Arbitrum One. One maker inventory of WBTC and USDC powers three products that share custody, pricing, and profit."
-        badge={<PhaseBadge phase={0} label="Phase 0 — in progress" state="active" />}
+        badge={<PhaseBadge phase={4} label="Phase 4 — in progress" state="active" />}
       />
 
       <section className="mt-10 rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
@@ -224,7 +224,11 @@ export default function ArchitecturePage() {
                   <td className="py-3 pr-4 text-zinc-100">{entry.name}</td>
                   <td className="py-3 pr-4 leading-relaxed text-zinc-400">{entry.exit}</td>
                   <td className="py-3">
-                    {entry.active ? (
+                    {entry.status === "passed" ? (
+                      <span className="inline-flex items-center rounded-full border border-teal-500/40 bg-teal-500/20 px-2.5 py-0.5 text-xs font-medium text-teal-200">
+                        Passed
+                      </span>
+                    ) : entry.status === "active" ? (
                       <PhaseBadge phase={entry.phase} label="In progress" state="active" />
                     ) : (
                       <PhaseBadge phase={entry.phase} label="Pending" />

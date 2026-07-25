@@ -26,7 +26,7 @@ describe("quote comparison", () => {
   it("renders both venues with USDC formatted to 6 decimals", () => {
     const quote = quoteFor("AQUA");
     render(
-      <QuoteComparison quote={quote} source="fixture" amountIn={ONE_WBTC} secondsRemaining={30} />,
+      <QuoteComparison quote={quote} source="fixture" secondsRemaining={30} />,
     );
 
     const aquaCard = screen.getByLabelText("Aqua · SwapVM");
@@ -49,7 +49,6 @@ describe("quote comparison", () => {
       <QuoteComparison
         quote={quoteFor("AQUA")}
         source="fixture"
-        amountIn={ONE_WBTC}
         secondsRemaining={30}
       />,
     );
@@ -62,7 +61,6 @@ describe("quote comparison", () => {
       <QuoteComparison
         quote={quoteFor("UNISWAP")}
         source="fixture"
-        amountIn={ONE_WBTC}
         secondsRemaining={30}
       />,
     );
@@ -77,7 +75,7 @@ describe("quote comparison", () => {
     const expected = formatTokenAmount(aquaNet - uniswapNet, 6, 2);
 
     render(
-      <QuoteComparison quote={quote} source="fixture" amountIn={ONE_WBTC} secondsRemaining={30} />,
+      <QuoteComparison quote={quote} source="fixture" secondsRemaining={30} />,
     );
     expect(
       screen.getByText(new RegExp(`improves output by ${expected.replace(".", "\\.")} USDC`)),
@@ -87,12 +85,12 @@ describe("quote comparison", () => {
   it("shows a countdown and flags expiry at zero", () => {
     const quote = quoteFor("AQUA");
     const { rerender } = render(
-      <QuoteComparison quote={quote} source="fixture" amountIn={ONE_WBTC} secondsRemaining={30} />,
+      <QuoteComparison quote={quote} source="fixture" secondsRemaining={30} />,
     );
     expect(screen.getByText("Quote expires in 30s")).toBeInTheDocument();
 
     rerender(
-      <QuoteComparison quote={quote} source="fixture" amountIn={ONE_WBTC} secondsRemaining={0} />,
+      <QuoteComparison quote={quote} source="fixture" secondsRemaining={0} />,
     );
     expect(screen.getByText("Quote expired")).toBeInTheDocument();
   });
@@ -104,7 +102,6 @@ describe("quote comparison", () => {
       <QuoteComparison
         quote={oneSided}
         source="fixture"
-        amountIn={ONE_WBTC}
         secondsRemaining={30}
       />,
     );
@@ -119,7 +116,6 @@ describe("provenance labeling", () => {
       <QuoteComparison
         quote={quoteFor("AQUA")}
         source="fixture"
-        amountIn={ONE_WBTC}
         secondsRemaining={30}
       />,
     );
@@ -132,7 +128,6 @@ describe("provenance labeling", () => {
       <QuoteComparison
         quote={quoteFor("AQUA")}
         source="live"
-        amountIn={ONE_WBTC}
         secondsRemaining={30}
       />,
     );

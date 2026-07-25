@@ -9,13 +9,13 @@ interface ProductCard {
 const PRODUCTS: readonly ProductCard[] = [
   {
     name: "Vortex Swap",
-    badge: "Awaiting Phases 2–4",
+    badge: "Interface live · fixture data",
     body:
       "Best execution for exact-input WBTC/USDC trades. Inventory-aware quotes from a 1inch Aqua SwapVM market-making strategy compete against Uniswap Trading API quotes on every request. A trade routes through Aqua only when Aqua's net output wins; otherwise it executes the exact Uniswap API-built transaction.",
   },
   {
     name: "Vortex Grow",
-    badge: "Awaiting Phases 6–7",
+    badge: "Interface live · fixture data",
     body:
       "Same-asset compounding — Grow WBTC. A custom Aqua app temporarily pulls maker WBTC and runs an atomic cycle across the Vortex PermAMM and an external Uniswap API route. The cycle succeeds only if final WBTC exceeds initial WBTC, takes a performance fee only from realized profit, then pushes principal plus profit back to the maker.",
   },
@@ -46,7 +46,7 @@ const PHASES: readonly string[] = [
   "Polish + freeze",
 ];
 
-const CURRENT_PHASE = 0;
+const CURRENT_PHASE = 4;
 
 function PhasePill({ children }: { children: string }) {
   return (
