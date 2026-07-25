@@ -1,5 +1,5 @@
 {
-  "commit": "e009542",
+  "commit": "e903523",
   "contracts": {
     "Aqua": 17,
     "AquaSwapVMRouter": 74,
@@ -7,6 +7,10 @@
     "VortexAquaOrderBuilder": 17,
     "VortexAquaLens": 9,
     "MockReferenceOracle": 11,
+    "VortexHook": 52,
+    "VortexRouter": 10,
+    "VortexQuoter": 8,
+    "VortexLiquidityManager": 13,
     "MockERC20": 19,
     "MockWBTC": 19,
     "MockUSDC": 19

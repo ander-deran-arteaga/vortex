@@ -30,6 +30,11 @@ const EXPORTS = [
   "VortexAquaOrderBuilder",
   "VortexAquaLens",
   "MockReferenceOracle",
+  // Vortex PermAMM (phase 5)
+  "VortexHook",
+  "VortexRouter",
+  "VortexQuoter",
+  "VortexLiquidityManager",
   // Tokens
   "MockERC20",
   "MockWBTC",
