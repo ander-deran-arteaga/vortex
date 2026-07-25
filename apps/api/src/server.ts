@@ -16,6 +16,9 @@ import { registerHealthRoutes } from "./routes/health";
 import { registerQuoteRoutes } from "./routes/quotes";
 import { registerTransactionRoutes } from "./routes/transactions";
 
+/** One sweep per TTL window is enough to bound the map. */
+export const SESSION_SWEEP_INTERVAL_MS = 60_000;
+
 export interface BuiltServer {
   app: FastifyInstance;
   ctx: AppContext;
@@ -76,6 +79,17 @@ export function buildServer(
   registerQuoteRoutes(app, ctx);
   registerTransactionRoutes(app, ctx);
   registerExecutionRoutes(app, ctx);
+
+  // Sessions are only ever removed by being consumed, so an abandoned quote
+  // would otherwise live in the map for the life of the process.
+  const sweepTimer = setInterval(() => {
+    ctx.exchange.sessions.sweep();
+  }, SESSION_SWEEP_INTERVAL_MS);
+  // Never hold the process (or a test runner) open on account of the sweeper.
+  sweepTimer.unref();
+  app.addHook("onClose", async () => {
+    clearInterval(sweepTimer);
+  });
 
   return { app, ctx };
 }

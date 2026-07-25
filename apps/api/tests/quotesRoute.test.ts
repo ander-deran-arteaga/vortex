@@ -9,6 +9,10 @@ import {
 import type { UniswapApiClient } from "../src/clients/uniswapApiClient";
 import { UniswapApiError } from "../src/clients/uniswapApiClient";
 import { createExecutionStore } from "../src/store/executions";
+import {
+  createQuoteSessionStore,
+  type ExchangeSessionPayload,
+} from "../src/store/quoteSessions";
 import { buildServer, type BuiltServer } from "../src/server";
 import type { JsonStoreFs } from "../src/store/jsonStore";
 
@@ -367,5 +371,61 @@ describe(`POST ${API_ROUTES.transactionsUniswap}`, () => {
 
     expect(res.statusCode).toBe(409);
     expect(zApiError.parse(res.json()).error.code).toBe("NOT_A_UNISWAP_SESSION");
+  });
+});
+
+describe("quote session lifecycle", () => {
+  it("sweeps expired sessions so abandoned quotes cannot grow unbounded", async () => {
+    let clock = 1_785_000_000_000;
+    const sessions = createQuoteSessionStore<ExchangeSessionPayload>({
+      now: () => clock,
+    });
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource(AQUA_COMPETITIVE_FIXTURE),
+        uniswapClient: stubUniswapClient(),
+        sessions,
+      },
+    );
+
+    // Three quotes nobody ever executes.
+    await postQuote(built);
+    await postQuote(built);
+    await postQuote(built);
+    expect(sessions.size).toBe(3);
+
+    clock += 46_000;
+    expect(sessions.sweep()).toBe(3);
+    expect(sessions.size).toBe(0);
+  });
+
+  it("rejects a build against an expired session", async () => {
+    let clock = 1_785_000_000_000;
+    const sessions = createQuoteSessionStore<ExchangeSessionPayload>({
+      now: () => clock,
+    });
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource(AQUA_UNCOMPETITIVE_FIXTURE),
+        uniswapClient: stubUniswapClient(),
+        sessions,
+      },
+    );
+
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    clock += 46_000;
+
+    const res = await built.app.inject({
+      method: "POST",
+      url: API_ROUTES.transactionsUniswap,
+      payload: { quoteSessionId: quote.quoteSessionId },
+    });
+
+    expect(res.statusCode).toBe(410);
+    expect(zApiError.parse(res.json()).error.code).toBe("QUOTE_SESSION_EXPIRED");
   });
 });
