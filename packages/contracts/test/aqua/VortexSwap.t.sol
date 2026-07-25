@@ -739,6 +739,39 @@ contract VortexSwapTest is Test {
         );
     }
 
+    function test_insufficientStrategyBalanceReverts() public {
+        // Lopsided book: plenty of WBTC, almost no USDC. A trade that clears
+        // the size cap can still exceed what the pool holds on the out side.
+        VortexAquaOrderBuilder.VortexSwapStrategyParams memory params = _defaultParams();
+        params.minBaseWeightBps = 1;
+        params.maxBaseWeightBps = 10_000;
+        (, bytes32 strategyHash) = _ship(params, 1e8, 100e6);
+
+        // 0.05 WBTC is 5% of the ~100,100 book (under the 10% cap) but wants
+        // ~4,997 USDC out against a 100 USDC balance.
+        vm.expectPartialRevert(VortexAquaPricing.VortexInsufficientStrategyBalance.selector);
+        pricing.preview(
+            _configBlob(params), maker, strategyHash, address(wbtc), address(usdc), true, 0.05e8, 1e8, 100e6, 0
+        );
+    }
+
+    function test_truncatedConfigBlobReverts() public {
+        (, bytes32 strategyHash) = _shipDefault();
+
+        bytes memory blob = _configBlob(_defaultParams());
+        bytes memory truncated = new bytes(blob.length - 1);
+        for (uint256 i = 0; i < truncated.length; i++) {
+            truncated[i] = blob[i];
+        }
+
+        vm.expectRevert(
+            abi.encodeWithSelector(VortexSwapConfigLib.BadConfigLength.selector, truncated.length)
+        );
+        pricing.preview(
+            truncated, maker, strategyHash, address(wbtc), address(usdc), true, 0.1e8, 1e8, 100_000e6, 0
+        );
+    }
+
     function test_dockedStrategySwapReverts() public {
         (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
 
