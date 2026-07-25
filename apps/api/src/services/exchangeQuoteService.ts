@@ -1,6 +1,7 @@
 import type {
   AquaComparison,
   ExchangeQuoteResponse,
+  QuoteSource,
   UniswapComparison,
 } from "@vortex/shared";
 import type { Hex } from "viem";
@@ -83,8 +84,10 @@ async function loadUniswapQuote(
 function toAquaComparison(
   quote: AquaQuote,
   compared: ComparisonResult["aqua"],
+  source: QuoteSource,
 ): AquaComparison {
   return {
+    source,
     amountOut: quote.amountOut.toString(),
     minimumAmountOut: quote.minimumAmountOut.toString(),
     estimatedGasUsd: "0",
@@ -101,6 +104,9 @@ function toUniswapComparison(
   compared: ComparisonResult["uniswap"],
 ): UniswapComparison {
   return {
+    // Uniswap quotes only ever come from the authenticated Trade API; there is
+    // no fixture Uniswap source. If one is ever added, thread its kind here.
+    source: "live",
     amountOut: quote.amountOut.toString(),
     minimumAmountOut: quote.minimumAmountOut.toString(),
     estimatedGasUsd: quote.gasFeeUSD ?? "0",
@@ -175,7 +181,9 @@ export async function quoteExchange(
     selectedVenue,
     expiresAt: session.expiresAt,
     comparison: {
-      aqua: aquaQuote ? toAquaComparison(aquaQuote, comparison.aqua) : null,
+      aqua: aquaQuote
+        ? toAquaComparison(aquaQuote, comparison.aqua, deps.aquaSource.kind)
+        : null,
       uniswap: uniswapQuote
         ? toUniswapComparison(uniswapQuote, comparison.uniswap)
         : null,

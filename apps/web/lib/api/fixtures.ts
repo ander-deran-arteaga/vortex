@@ -91,6 +91,7 @@ export function buildExchangeQuoteFixture(
     expiresAt: now + ttlMs,
     comparison: {
       aqua: {
+        source: "fixture",
         amountOut: aquaOut.toString(),
         minimumAmountOut: afterSlippage(aquaOut, request.slippageBps).toString(),
         estimatedGasUsd: AQUA_GAS_USD,
@@ -101,6 +102,7 @@ export function buildExchangeQuoteFixture(
         makerCoverageBps: 10_000,
       },
       uniswap: {
+        source: "fixture",
         amountOut: uniswapOut.toString(),
         minimumAmountOut: afterSlippage(uniswapOut, request.slippageBps).toString(),
         estimatedGasUsd: UNISWAP_GAS_USD,
