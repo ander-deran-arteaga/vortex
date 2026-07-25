@@ -2,50 +2,54 @@
 
 ## Current gate
 
-Phase 0 (repository and qualification skeleton) and Phase 1 (official Aqua
-token transfer) have both passed review. Phase 2 (SwapVM best execution) is
-open for contracts; Phase 3 (Uniswap comparison router) is open for backend;
-Phase 4 groundwork is open for frontend against fixtures.
+Phases 0 and 1 have passed. Phase 2 (SwapVM best execution), Phase 3 (Uniswap
+comparison router), and Phase 4 (best-execution frontend, fixture-backed) are
+all open and progressing in parallel.
 
-Verified at this gate: `pnpm build` green across all four workspaces,
-`pnpm test` green (contracts 20, shared 24, web 54, api 17 — 115 total),
-`forge test` 20/20, commit policy 29/29 clean, naming sweep clean, no secrets
-or coordination files tracked.
+Verified at committed HEAD, in an isolated worktree: `forge build` clean,
+38 forge tests passing, shared 24, plus green web and api suites.
+
+**Open compliance issue:** three commits (`dd3b841`, `87d7b9f`, `d06ac17`)
+use `docs:`/`test:` prefixes, which the commit policy does not allow. The
+integration CI job fails until they are reworded. A `commit-msg` hook now
+blocks any further violations; install it in a fresh clone with
+`bash scripts/install-hooks.sh`.
 
 ## Contracts
-- Current task: Phase 2 — VortexAquaPricing through Extruction, order builder,
-  inventory-aware fees, MockReferenceOracle, lens, Vortex Swap risk tests
-- Last commit: d9e0785 (transitive v4 remappings, documented version skew)
-- Tests: 20/20 forge green (AquaBaseline 11, VortexTokenMath 7 incl. fuzz,
-  Phase0Deps 2)
-- Blocker: none
-- Interface changes: SwapVM v1.0.1 emits `Swapped` and uses the 5-argument
-  `quote`/`swap` form with explicit tokens; PoolManager is pragma 0.8.26 exact,
-  so Phase 5 obtains it from a fork rather than importing source
+- Current task: Phase 2 — Vortex Swap pricing, order builder, and strategy
+  lens are committed; inventory-aware fees and rebates landed
+- Last commit: work in flight on VortexAquaPricing and VortexAquaOrderBuilder
+- Tests: 38/38 forge green at committed HEAD (Vortex Swap suite 17,
+  AquaBaseline 11, VortexTokenMath 7, Phase0Deps 2, lens 1)
+- Blocker: none; a via_ir stack-too-deep exists in the uncommitted edit only
+- Interface changes: SwapVM v1.0.1 pinned 5-argument `quote`/`swap` with
+  explicit tokens; PoolManager pragma 0.8.26 forces a fork-sourced instance
+  in Phase 5
 
 ## Backend
-- Current task: Phase 3 — authenticated Uniswap Trade API client, quote
-  sessions, venue comparator, transaction construction
-- Last commit: 5ee3242 (env isolation, error logging, test rigor)
-- Tests: 17/17 vitest green, including a polluted-shell run; typecheck clean
-- Blocker: none; venue comparison uses a fixture Aqua quote source until
-  Phase 2 lands the real one
-- Interface changes: `expiresAt` is epoch milliseconds (D-010); quote sessions
-  are 45 s single-use with a 30 s refresh threshold (D-011)
+- Current task: Phase 3 — Uniswap client with rate limiting, live and fixture
+  Aqua quote sources, quote-session and evidence stores, route wiring
+- Last commit: d06ac17 (API-built swap executed on an Arbitrum One fork)
+- Tests: api suite green; the fork integration test is opt-in via
+  `VORTEX_INTEGRATION=1` and never runs in normal CI
+- Blocker: none; needs a seeded fork strategy hash from contracts for the
+  Aqua-wins demo path
+- Interface changes: venues ranked on net output; `expiresAt` epoch ms
 
 ## Frontend
-- Current task: Phase 4 groundwork — best-execution and Grow interfaces built
-  against shared schemas with fixture data, wired live when Phase 3 exits
-- Last commit: cfc6ee7 (web shell and route pages)
-- Tests: 54/54 vitest green, typecheck clean, `next build` green with all
-  routes prerendered
-- Blocker: none
+- Current task: Phase 4 — maker, swap, and Grow interfaces against shared
+  schemas with clearly labeled fixture data
+- Last commit: 20ac56b (maker strategy and dashboard interfaces)
+- Tests: web suite green, typecheck clean, `next build` green across 7 pages
+- Blocker: none; flips to the live API when Phase 3 exits
 - Interface changes: none; consumes `@vortex/shared` read-only
 
 ## Integration
-- Latest green commit: d9e0785
-- Latest deployment: local Aqua, AquaSwapVMRouter, and mocks recorded in
-  deployments/31337.json; ephemeral fork runs write an ignored .fork.json
-- Known failures: none
-- Next gate: Phase 2 exit (SwapVM best execution), then Phase 3 exit (an
-  API-built Uniswap transaction executed onchain with evidence stored)
+- Latest green commit: 261ab9d
+- Uniswap qualification evidence: API-built swap executed on an Arbitrum One
+  fork (chainId 42161, block 487597751) with request IDs and transaction hash
+  captured. The hash is fork-local and is labeled as such everywhere it
+  appears; it does not resolve on a public explorer.
+- Known failures: commit policy (three commits, above)
+- Next gate: Phase 2 exit, then Phase 3 exit with deterministic Aqua-wins and
+  Uniswap-wins cases
