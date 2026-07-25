@@ -6,7 +6,6 @@ import { ConnectButton } from "@/components/connect-button";
 import { VortexMark } from "@/components/ui/vortex-mark";
 
 const LINKS = [
-  { href: "/", label: "Overview" },
   { href: "/maker", label: "Maker" },
   { href: "/swap", label: "Swap" },
   { href: "/grow", label: "Grow" },
@@ -31,7 +30,7 @@ export function Nav() {
         <Link
           href="/"
           className="group flex shrink-0 items-center gap-2.5 text-say-1"
-          aria-label="Vortex, home"
+          aria-label="Vortex, back to the landing page"
         >
           {/* The mark sits bare on the surface. No tile, no chip behind it. */}
           <VortexMark

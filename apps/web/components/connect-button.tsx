@@ -1,78 +1,77 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { ConnectButton as RainbowConnectButton } from "@rainbow-me/rainbowkit";
 import { Action, StatusMark } from "@/components/ui/primitives";
-import { truncateAddress } from "@/lib/format";
 
 /**
- * The wallet control, in the nav's own language.
+ * RainbowKit supplies the connection flow, the wallet list and the account
+ * modal. The button itself is ours, via `ConnectButton.Custom`, so the control
+ * speaks the Vortex system rather than shipping RainbowKit's default pill.
  *
- * Disconnected it is the primary `Action`: copper, chamfered, the one thing in
- * the bar you can press. Connected it stops being a button-shaped object and
- * becomes a readout: the address in data type over the network it is on, quiet
- * until you hover it to disconnect. No bordered pill either way.
+ * `mounted` from the render prop is RainbowKit's own hydration gate: nothing
+ * wallet-derived is rendered until it is true, so server and client markup
+ * cannot disagree. The placeholder that shows until then is a real, visible
+ * control, never an invisible element waiting to be revealed.
  */
 export function ConnectButton() {
-  // Hydration safety: wallet state differs between server and client, so we
-  // render a neutral placeholder until after the first client mount.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const { address, chain, isConnected } = useAccount();
-  const { connect, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
-
-  if (!mounted) {
-    return (
-      <Action disabled className="shrink-0">
-        Connect
-      </Action>
-    );
-  }
-
-  if (isConnected && address) {
-    // `chain` is undefined when the wallet is on a chain outside our config
-    // (anything other than Arbitrum One or the local fork). That is a real
-    // warning, so it is stated in words and in the warn tone, not colour alone.
-    return (
-      <button
-        type="button"
-        onClick={() => disconnect()}
-        title="Disconnect"
-        aria-label={`Disconnect ${truncateAddress(address)}`}
-        className="group flex shrink-0 items-center gap-2.5 text-left"
-      >
-        <StatusMark tone={chain ? "gain" : "warn"} />
-        <span className="flex flex-col items-start leading-tight">
-          <span className="num text-[13px] text-say-1 transition-colors duration-150 group-hover:text-cu">
-            {truncateAddress(address)}
-          </span>
-          <span
-            className={
-              chain
-                ? "text-[11px] text-say-3 transition-colors duration-150 group-hover:text-say-2"
-                : "text-[11px] text-warn"
-            }
-          >
-            {chain ? chain.name : "Unsupported chain"}
-          </span>
-        </span>
-      </button>
-    );
-  }
-
   return (
-    <Action
-      onClick={() => connect({ connector: injected() })}
-      disabled={isPending}
-      busy={isPending}
-      className="shrink-0"
-    >
-      {isPending ? "Connecting…" : "Connect"}
-    </Action>
+    <RainbowConnectButton.Custom>
+      {({
+        account,
+        chain,
+        openAccountModal,
+        openChainModal,
+        openConnectModal,
+        mounted,
+      }) => {
+        if (!mounted) {
+          return (
+            <Action disabled className="shrink-0">
+              Connect
+            </Action>
+          );
+        }
+
+        if (account === undefined || chain === undefined) {
+          return (
+            <Action onClick={openConnectModal} className="shrink-0">
+              Connect
+            </Action>
+          );
+        }
+
+        // An unsupported chain is a real warning, so it is stated in words and
+        // in the warn tone, never by colour alone.
+        if (chain.unsupported === true) {
+          return (
+            <button
+              type="button"
+              onClick={openChainModal}
+              className="flex shrink-0 items-center gap-2.5 text-sm text-warn transition-colors duration-150 hover:text-say-1"
+            >
+              <StatusMark tone="warn" />
+              Unsupported chain
+            </button>
+          );
+        }
+
+        return (
+          <button
+            type="button"
+            onClick={openAccountModal}
+            aria-label={`Account ${account.displayName}. Open wallet options.`}
+            className="group flex shrink-0 items-center gap-2.5 text-left"
+          >
+            <StatusMark tone="gain" />
+            <span className="flex flex-col items-start leading-tight">
+              <span className="num text-[13px] text-say-1 transition-colors duration-150 group-hover:text-cu">
+                {account.displayName}
+              </span>
+              <span className="text-[11px] text-say-2">{chain.name}</span>
+            </span>
+          </button>
+        );
+      }}
+    </RainbowConnectButton.Custom>
   );
 }
