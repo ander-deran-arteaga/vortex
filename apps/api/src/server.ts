@@ -3,11 +3,18 @@ import { pathToFileURL } from "node:url";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { buildContext, type AppContext } from "./context";
+import {
+  buildContext,
+  type AppContext,
+  type BuildContextOverrides,
+} from "./context";
 import type { EnvOverrides } from "./config/env";
 import { RequestValidationError } from "./lib/errors";
 import { registerConfigRoutes } from "./routes/config";
+import { registerExecutionRoutes } from "./routes/executions";
 import { registerHealthRoutes } from "./routes/health";
+import { registerQuoteRoutes } from "./routes/quotes";
+import { registerTransactionRoutes } from "./routes/transactions";
 
 export interface BuiltServer {
   app: FastifyInstance;
@@ -16,10 +23,11 @@ export interface BuiltServer {
 
 export function buildServer(
   overrides: EnvOverrides = {},
-  opts: { logger?: boolean; envSource?: NodeJS.ProcessEnv } = {},
+  opts: { logger?: boolean } & BuildContextOverrides = {},
 ): BuiltServer {
-  const ctx = buildContext(overrides, opts.envSource);
-  const app = Fastify({ logger: opts.logger ?? false });
+  const { logger, ...contextDeps } = opts;
+  const ctx = buildContext(overrides, contextDeps);
+  const app = Fastify({ logger: logger ?? false });
 
   app.register(cors, { origin: true });
 
@@ -65,6 +73,9 @@ export function buildServer(
 
   registerHealthRoutes(app, ctx);
   registerConfigRoutes(app, ctx);
+  registerQuoteRoutes(app, ctx);
+  registerTransactionRoutes(app, ctx);
+  registerExecutionRoutes(app, ctx);
 
   return { app, ctx };
 }

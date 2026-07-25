@@ -43,7 +43,7 @@ export interface UniswapQuote extends VenueQuote {
 }
 
 export interface QuoteRequestParams {
-  chainId: number;
+  chainId: 42161 | 31337;
   tokenIn: Address;
   tokenOut: Address;
   amountIn: bigint;
