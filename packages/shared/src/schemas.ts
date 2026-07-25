@@ -12,6 +12,19 @@ export const zAmount = z.string().regex(/^[0-9]+$/, "invalid amount");
 export const zChainId = z.union([z.literal(42161), z.literal(31337)]);
 export const zBps = z.number().int().min(0).max(10_000);
 
+/**
+ * Venues a Vortex Swap can be routed to.
+ *
+ * - `AQUA`     — official Aqua + SwapVM, settled directly
+ *                (taker → Aqua router → SwapVM → Aqua → maker).
+ * - `UNISWAP`  — the Uniswap Trade API, executed via an API-built transaction.
+ *
+ * Vortex PermAMM is deliberately NOT a Vortex Swap venue in the MVP. It is a
+ * separate Uniswap v4 liquidity venue reachable from Vortex Grow, and a
+ * `VORTEX_PERMAMM` member is reserved for a future explicit three-venue
+ * comparison. Adding it is a deliberate schema change, never an accident —
+ * see docs/decisions.md D-015.
+ */
 export const zVenue = z.enum(["AQUA", "UNISWAP"]);
 export type Venue = z.infer<typeof zVenue>;
 
@@ -67,6 +80,11 @@ export const zUniswapComparison = z.object({
 });
 export type UniswapComparison = z.infer<typeof zUniswapComparison>;
 
+/**
+ * Direct Aqua + SwapVM execution. `order` and `takerTraitsAndData` are the
+ * arguments to the official SwapVM router's `swap` — no PermAMM calldata is
+ * involved, and this path works with no PermAMM contracts deployed.
+ */
 export const zAquaExecution = z.object({
   kind: z.literal("AQUA_SWAPVM"),
   order: z.unknown(),

@@ -23,6 +23,9 @@ jobs:
       - name: Commit policy
         run: bash scripts/check-commit-policy.sh
 
+      - name: Architectural invariants
+        run: bash scripts/check-architecture.sh
+
       - name: Forbidden naming
         run: |
           # Legacy pre-Vortex project names. Assembled from fragments so this

@@ -97,6 +97,50 @@ and keeps contradictions between research passes rather than silently picking
 one. Nothing in the client is built on an `[UNVERIFIED]` claim without first
 confirming it against the live API. Remembered API behavior is never trusted.
 
+## D-015 — Vortex Swap's Aqua execution must not depend on Vortex PermAMM
+
+**Invariant.** Vortex Swap settles through official Aqua and SwapVM only:
+
+```
+taker → Aqua router (AquaSwapVMRouter) → SwapVM → Aqua settlement → maker
+```
+
+It must never settle `taker → Aqua → Vortex PermAMM → maker`. Vortex PermAMM
+is a separate Uniswap v4 liquidity venue. It may be used on its own, compared
+as an additional venue later, or used as one leg of Vortex Grow — but it is
+not part of the Aqua SwapVM settlement path.
+
+Consequences, all enforced rather than merely documented:
+
+- Aqua pricing and settlement live in `packages/contracts/src/aqua/`; the
+  Uniswap v4 hook, router, quoter, and liquidity manager live in
+  `packages/contracts/src/permamm/`. Nothing in `aqua/` may reference
+  anything in `permamm/`.
+- Vortex Swap has exactly two execution kinds: `AQUA_SWAPVM` (direct Aqua and
+  SwapVM quote plus settlement) and `UNISWAP_API` (external quote plus an
+  API-built transaction). A third kind is a deliberate schema change.
+- The backend's Aqua quote path calls SwapVM directly and builds direct
+  Aqua/SwapVM calldata. PermAMM clients stay in their own module and are
+  reachable only from Grow opportunity scanning, or from a future explicit
+  `VORTEX_PERMAMM` venue.
+- A Vortex Swap must succeed with no PermAMM contracts deployed at all, and
+  disabling PermAMM must not affect Vortex Swap.
+
+`scripts/check-architecture.sh` enforces the import and call-graph rules in
+CI. The rule matters most from Phase 5 onward: PermAMM did not exist when this
+was written, so the invariant is a guard against future coupling rather than a
+description of a past fix.
+
+## D-016 — Vortex Swap uses the official Aqua SwapVM router directly
+
+The taker-facing router is `AquaSwapVMRouter` from the pinned
+`@1inch/swap-vm`, not a Vortex-authored router. `VortexAquaPricing` plugs into
+it as the SwapVM extension, so quoting and settlement run through official
+sponsor code rather than a wrapper. The `VortexAquaRouter` contract sketched in
+the original plan is therefore not built; `VortexAquaOrderBuilder` and
+`VortexAquaLens` provide the order construction and health views around the
+official router.
+
 ## D-014 — CI workflows declare least privilege and cancel superseded runs
 
 Every workflow sets `permissions: {contents: read}` and a

@@ -10,9 +10,18 @@ asset through profitable same-chain arbitrage.
 
 | Product | What it does |
 | --- | --- |
-| **Vortex Swap** | Best execution. Official Aqua + SwapVM inventory-aware quotes are benchmarked against the Uniswap Trade API. Aqua executes only when it beats the best observed executable quote without violating the maker's onchain safety envelope; otherwise the Uniswap API builds the fallback transaction. |
-| **Vortex Grow** | Same-asset compounding. A maker ships WBTC through a custom Aqua app; Vortex executes an atomic WBTC → USDC → WBTC cycle across the Vortex PermAMM and an external venue. The transaction succeeds only if final WBTC exceeds initial WBTC plus the maker's minimum profit; the performance fee comes from realized profit only. |
-| **Vortex PermAMM** | A real Uniswap v4 dynamic-fee pool (`VortexHook`) with controlled liquidity, a mock reference oracle, an immutable safety fee floor, and signed per-swap commercial fees. One leg of the Grow cycle. |
+| **Vortex Swap** | Best execution across two venues. `AQUA_SWAPVM` is a direct official Aqua + SwapVM quote and settlement; `UNISWAP_API` is an external quote with an API-built transaction. Aqua executes only when it beats the best observed executable quote without violating the maker's onchain safety envelope; otherwise the Uniswap API builds the fallback. |
+| **Vortex Grow** | Same-asset compounding. A maker ships WBTC through a custom Aqua app; Vortex executes an atomic WBTC → USDC → WBTC cycle using the Vortex PermAMM as one leg and an external venue as the other. The transaction succeeds only if final WBTC exceeds initial WBTC plus the maker's minimum profit; the performance fee comes from realized profit only. |
+| **Vortex PermAMM** | A separate Uniswap v4 liquidity venue: a real dynamic-fee pool (`VortexHook`) with controlled liquidity, a mock reference oracle, an immutable safety fee floor, and signed per-swap commercial fees. Usable on its own, comparable as an additional venue later, and one possible leg of Grow. |
+
+### Architectural invariant
+
+**Vortex Swap's Aqua execution does not depend on Vortex PermAMM availability.**
+Vortex Swap settles `taker → Aqua router → SwapVM → Aqua settlement → maker`,
+never through the PermAMM. A Vortex Swap succeeds with no PermAMM contracts
+deployed at all. This is enforced in CI by `scripts/check-architecture.sh`,
+which fails the build if the Aqua module or the backend's Vortex Swap path
+references the PermAMM module. See `docs/decisions.md` D-015.
 
 ## Network
 
