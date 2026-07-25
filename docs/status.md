@@ -48,6 +48,21 @@ Verified green at `80f2873`: **388 tests** — contracts 61, shared 25, api 173
 - Known failures: none
 - Next gate: Phase 3 formal pass, Phase 4 pass, then Phase 5 exit
 
+## Architecture
+
+Vortex Swap offers two venues — `AQUA_SWAPVM` (direct official Aqua + SwapVM
+quote and settlement) and `UNISWAP_API` (external quote, API-built
+transaction). Vortex PermAMM is a separate Uniswap v4 liquidity venue, used as
+one leg of Vortex Grow and reserved for a future explicit venue comparison; it
+is not part of the Aqua settlement path.
+
+The invariant "Vortex Swap's Aqua execution must not depend on Vortex PermAMM
+availability" (D-015) is enforced in CI by `scripts/check-architecture.sh`,
+which fails the build if the Aqua module or the backend's Vortex Swap path
+references the PermAMM module. Verified empirically: the 33-test Vortex Swap
+suite passes with no `permamm/` module compiled and no PermAMM address in any
+deployment file.
+
 ## Data honesty
 
 Every venue quote the UI renders carries its provenance. `source` is required
