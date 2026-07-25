@@ -14,6 +14,24 @@ PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 RPC=http://127.0.0.1:8545
 ```
 
+## Pre-flight — run this immediately before demoing
+
+```bash
+cd packages/contracts && forge script script/CheckDemoReady.s.sol --rpc-url $RPC
+```
+
+Read-only, one second, and it **reverts** rather than reporting ready. It
+catches the two conditions that are otherwise silent — the chain looks perfectly
+healthy in both:
+
+- **A stale oracle.** Vortex Swap pricing rejects an oracle older than one hour.
+  Anvil stamps new blocks with wall-clock time, so an idle chain still *reads*
+  fresh right up until the demo's first transaction mines a block — and then
+  every quote reverts `VortexStaleOracle`. Refresh with section 3's
+  `SCENARIO=AQUA_WINS`, which re-stamps the price.
+- **A maker left on the losing scenario**, which makes the headline
+  best-execution scene show Aqua losing.
+
 ## 0. Bring the whole system up (one command, from the repo root)
 
 ```bash
