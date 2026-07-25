@@ -772,6 +772,56 @@ contract VortexSwapTest is Test {
         );
     }
 
+    /// @notice ARCHITECTURAL REGRESSION GUARD (MASTER D-015 / Addendum 7).
+    /// @dev Vortex Swap settles `taker → AquaSwapVMRouter → SwapVM → Aqua →
+    ///      maker`. It must NEVER depend on Vortex PermAMM being available.
+    ///      This whole file already runs with no PermAMM deployed, so today
+    ///      this test adds no coverage — that is the point. It exists to keep
+    ///      FAILING LOUDLY if someone later makes Aqua settlement reach for a
+    ///      v4 pool: the assertions below would then revert with a missing
+    ///      PoolManager/hook rather than quietly coupling the two products.
+    ///      Do not delete it because it "looks redundant".
+    function test_swapSucceedsWithoutPermAmmDeployed() public {
+        VortexAquaOrderBuilder.VortexSwapStrategyParams memory params = _defaultParams();
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _ship(params, 1e8, 100_000e6);
+
+        // No PoolManager, no VortexHook, no VortexRouter, no VortexQuoter
+        // exists in this test's world — nothing in setUp deploys one.
+        assertEq(address(pricing.AQUA()), address(aqua), "pricing talks to Aqua, not a pool");
+
+        // 1. A valid quote is returned.
+        (uint256 quotedIn, uint256 quotedOut) = _quote(order, address(wbtc), address(usdc), 0.1e8, true);
+        assertEq(quotedIn, 0.1e8);
+        assertGt(quotedOut, 0);
+
+        // 2. Real WBTC and USDC change hands.
+        uint256 makerWbtcBefore = wbtc.balanceOf(maker);
+        uint256 takerUsdcBefore = usdc.balanceOf(taker);
+        (uint256 amountIn, uint256 amountOut) = _swap(order, address(wbtc), address(usdc), 0.1e8, true, "");
+        assertEq(wbtc.balanceOf(maker), makerWbtcBefore + amountIn, "maker received real WBTC");
+        assertEq(usdc.balanceOf(taker), takerUsdcBefore + amountOut, "taker received real USDC");
+
+        // 3. Aqua virtual balances moved by exactly those deltas.
+        (uint256 virtualWbtc, uint256 virtualUsdc) =
+            aqua.safeBalances(maker, address(router), strategyHash, address(wbtc), address(usdc));
+        assertEq(virtualWbtc, 1e8 + amountIn);
+        assertEq(virtualUsdc, 100_000e6 - amountOut);
+
+        // 4. Inventory and fee constraints still bind without any pool.
+        vm.prank(taker);
+        vm.expectPartialRevert(VortexAquaPricing.VortexMaxTradeExceeded.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.5e8, _takerTraitsAndData(true, ""));
+
+        VortexAquaPricing.FeeBreakdown memory bd = pricing.preview(
+            _configBlob(params), maker, strategyHash, address(wbtc), address(usdc), true, 0.05e8, 1e8, 100_000e6, 10_000
+        );
+        assertGe(
+            bd.finalFeeBps,
+            params.minSafetyFeeBps + params.minCommercialFeeBps,
+            "safety floor still binds with no PermAMM in the system"
+        );
+    }
+
     function test_dockedStrategySwapReverts() public {
         (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
 
