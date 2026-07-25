@@ -35,6 +35,10 @@ const EXPORTS = [
   "VortexRouter",
   "VortexQuoter",
   "VortexLiquidityManager",
+  // Vortex Grow (phase 6)
+  "VortexCompounder",
+  "MockExternalRouter",
+  "MockStalePool",
   // Tokens
   "MockERC20",
   "MockWBTC",

@@ -1,5 +1,5 @@
 {
-  "commit": "e903523",
+  "commit": "13654c5",
   "contracts": {
     "Aqua": 17,
     "AquaSwapVMRouter": 74,
@@ -11,6 +11,9 @@
     "VortexRouter": 10,
     "VortexQuoter": 8,
     "VortexLiquidityManager": 13,
+    "VortexCompounder": 36,
+    "MockExternalRouter": 11,
+    "MockStalePool": 9,
     "MockERC20": 19,
     "MockWBTC": 19,
     "MockUSDC": 19
