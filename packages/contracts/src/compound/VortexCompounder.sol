@@ -57,7 +57,6 @@ contract VortexCompounder is AquaApp, EIP712 {
     error VortexAssetSpentAboveLimit(uint256 spent, uint256 limit);
     error VortexBridgeDustRemains(uint256 dust);
     error VortexExternalCallFailed(bytes reason);
-    error VortexBridgeShortfall(uint256 received, uint256 expected);
 
     /// @param aqua      Official Aqua deployment.
     /// @param router    Vortex PermAMM router (Grow is the only place the two
