@@ -110,7 +110,7 @@ contract DeployPermAMM is Script {
         console.log("poolId       %s", vm.toString(PoolId.unwrap(key.toId())));
 
         _write(deployment, address(poolManager), address(hook), address(router), address(quoter),
-            address(liquidityManager), PoolId.unwrap(key.toId()));
+            address(liquidityManager), key);
     }
 
     /// @dev v4 reads a hook's permissions from its address, so the deployment
@@ -181,7 +181,7 @@ contract DeployPermAMM is Script {
         address router,
         address quoter,
         address liquidityManager,
-        bytes32 poolId
+        PoolKey memory key
     )
         internal
     {
@@ -216,7 +216,18 @@ contract DeployPermAMM is Script {
 
         string memory root = "deployment";
         vm.serializeUint(root, "chainId", block.chainid);
-        vm.serializeBytes32(root, "permAmmPoolId", poolId);
+        vm.serializeBytes32(root, "permAmmPoolId", PoolId.unwrap(key.toId()));
+        // Publish the KEY, not just its hash. v4 sorts currencies by address,
+        // so a consumer that reconstructs the key has to re-derive the
+        // orientation, the fee flag and the tick spacing — four chances to
+        // drift from what was actually deployed. Publishing removes them.
+        string memory pk = "poolKey";
+        vm.serializeAddress(pk, "currency0", Currency.unwrap(key.currency0));
+        vm.serializeAddress(pk, "currency1", Currency.unwrap(key.currency1));
+        vm.serializeUint(pk, "fee", key.fee);
+        vm.serializeInt(pk, "tickSpacing", key.tickSpacing);
+        string memory poolKeyJson = vm.serializeAddress(pk, "hooks", address(key.hooks));
+        vm.serializeString(root, "permAmmPoolKey", poolKeyJson);
         string memory json = vm.serializeString(root, "contracts", contractsJson);
 
         if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {

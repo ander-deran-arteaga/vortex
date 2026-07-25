@@ -174,6 +174,16 @@ contract DeployGrow is Script {
         vm.serializeBytes32(
             root, "permAmmPoolId", vm.parseJsonBytes32(existing, ".permAmmPoolId")
         );
+        // Carry the published PoolKey through — dropping it here would make it
+        // vanish from the final artifact that consumers actually read.
+        string memory pk = "poolKey";
+        vm.serializeAddress(pk, "currency0", vm.parseJsonAddress(existing, ".permAmmPoolKey.currency0"));
+        vm.serializeAddress(pk, "currency1", vm.parseJsonAddress(existing, ".permAmmPoolKey.currency1"));
+        vm.serializeUint(pk, "fee", vm.parseJsonUint(existing, ".permAmmPoolKey.fee"));
+        vm.serializeInt(pk, "tickSpacing", vm.parseJsonInt(existing, ".permAmmPoolKey.tickSpacing"));
+        string memory poolKeyJson =
+            vm.serializeAddress(pk, "hooks", vm.parseJsonAddress(existing, ".permAmmPoolKey.hooks"));
+        vm.serializeString(root, "permAmmPoolKey", poolKeyJson);
         string memory json = vm.serializeString(root, "contracts", contractsJson);
 
         if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {

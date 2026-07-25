@@ -9,6 +9,7 @@ import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 import { LPFeeLibrary } from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import { TickMath } from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import { Currency } from "@uniswap/v4-core/src/types/Currency.sol";
+import { PoolId } from "@uniswap/v4-core/src/types/PoolId.sol";
 import { PoolKey } from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 import { VortexCompounder } from "../src/compound/VortexCompounder.sol";
@@ -99,7 +100,7 @@ contract ExecuteDemoGrow is Script {
         uint128 bridgeAmount = uint128(vm.envOr("BRIDGE_AMOUNT", uint256(90_000e6)));
         uint64 nonce = uint64(vm.envOr("ROUTE_NONCE", uint256(block.timestamp)));
 
-        PoolKey memory poolKey = _poolKey(deployment, wbtc, usdc);
+        PoolKey memory poolKey = _poolKey(deployment);
         bool wbtcIsCurrency0 = wbtc < usdc;
 
         // Leg 2 calldata: the external venue buys the principal back. Bound by
@@ -160,23 +161,24 @@ contract ExecuteDemoGrow is Script {
         s.salt = uint64(vm.parseJsonUint(grow, ".strategy.salt"));
     }
 
-    function _poolKey(
-        string memory deployment,
-        address wbtc,
-        address usdc
-    )
-        private
-        pure
-        returns (PoolKey memory)
-    {
-        (address c0, address c1) = wbtc < usdc ? (wbtc, usdc) : (usdc, wbtc);
-        return PoolKey({
-            currency0: Currency.wrap(c0),
-            currency1: Currency.wrap(c1),
-            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-            tickSpacing: 60,
-            hooks: VortexHook(vm.parseJsonAddress(deployment, ".contracts.VortexHook"))
+    /// @dev READS the published PoolKey rather than re-deriving it. Rebuilding
+    ///      it means re-deciding the currency sort order, the dynamic-fee flag
+    ///      and the tick spacing — four independent chances to disagree with
+    ///      what was actually deployed. The poolId cross-check below turns any
+    ///      such disagreement into an immediate failure instead of a swap
+    ///      against the wrong pool.
+    function _poolKey(string memory deployment) private pure returns (PoolKey memory key) {
+        key = PoolKey({
+            currency0: Currency.wrap(vm.parseJsonAddress(deployment, ".permAmmPoolKey.currency0")),
+            currency1: Currency.wrap(vm.parseJsonAddress(deployment, ".permAmmPoolKey.currency1")),
+            fee: uint24(vm.parseJsonUint(deployment, ".permAmmPoolKey.fee")),
+            tickSpacing: int24(vm.parseJsonInt(deployment, ".permAmmPoolKey.tickSpacing")),
+            hooks: VortexHook(vm.parseJsonAddress(deployment, ".permAmmPoolKey.hooks"))
         });
+        require(
+            PoolId.unwrap(key.toId()) == vm.parseJsonBytes32(deployment, ".permAmmPoolId"),
+            "grow: published pool key does not hash to the published pool id"
+        );
     }
 
     function _makerBalances(

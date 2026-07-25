@@ -19,5 +19,12 @@
     "VortexQuoter": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
     "VortexRouter": "0x9A676e781A523b5d0C0e43731313A708CB607508"
   },
-  "permAmmPoolId": "0xf3b3377abe1c5c26fb6d5a2da9b1d2e03a0f5b7fc4c1833b17aa8c677c841648"
+  "permAmmPoolId": "0xf3b3377abe1c5c26fb6d5a2da9b1d2e03a0f5b7fc4c1833b17aa8c677c841648",
+  "permAmmPoolKey": {
+    "currency0": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "currency1": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    "fee": 8388608,
+    "hooks": "0x982Ac4415215c4C8B8afbA2F03A0984D2fbbaac0",
+    "tickSpacing": 60
+  }
 }
