@@ -29,8 +29,32 @@ reentrancy locks).
   and current main (v1.0.1 `swap(order, tokenIn, tokenOut, amount, takerData)`
   vs main's 3-arg form; opcode dispatch table vs enum). All Vortex code and
   docs target the PINNED v1.0.1 API only — never consult main when editing.
-- **v4-core PoolManager is `pragma solidity 0.8.26` (exact)** and cannot be
-  compiled inside our 0.8.30 build. Phase 5 imports v4-core
-  interfaces/libraries only; a live PoolManager comes from an Arbitrum fork
-  (`scripts/bootstrap-fork.sh` with `FORK_RPC_URL`) or `vm.etch`ed prebuilt
-  bytecode in tests.
+- **v4-core PoolManager is `pragma solidity 0.8.26` (exact)** while everything
+  else here is 0.8.30 (required by aqua/swap-vm). Solidity resolves one compiler
+  version per *compilation unit* — a file plus all its transitive imports — so a
+  0.8.30 file can never `import PoolManager.sol`, and no Foundry setting changes
+  that (`compilation_restrictions` partitions units, it cannot split one).
+
+  **Verified resolution** (spiked end to end before Phase 5, real PoolManager
+  deployed at 4.2M gas in a plain unit test, no fork, no `vm.etch`):
+
+  1. Every v4 type the hook touches is already `^0.8.0` — `IHooks`, `Hooks`,
+     `PoolKey`, `PoolId`, `Currency`, `BeforeSwapDelta`, `LPFeeLibrary` — so
+     Vortex contracts stay at 0.8.30 and import those directly. Only the
+     PoolManager *implementation* is version-locked.
+  2. One file, `src/v4/V4Deps.sol`, declares `pragma solidity 0.8.26` and
+     imports `PoolManager`. It exists solely to pull v4-core into the build as
+     its own compilation unit so the artifact is produced. **No 0.8.30 file may
+     import it** — that would merge the units and fail again.
+  3. Tests instantiate it by artifact, never by type:
+     `address pm = deployCode("PoolManager.sol:PoolManager", abi.encode(owner));`
+     then use it through `IPoolManager(pm)`.
+  4. `foundry.toml` carries an `additional_compiler_profiles` entry for 0.8.26
+     plus a `compilation_restrictions` entry scoped to
+     `node_modules/@uniswap/v4-core/**`, and the default profile must NOT hard-pin
+     `solc` (an explicit pin forces one version on every unit).
+
+  This keeps Phase 5 unit tests hermetic and fork-free; the Arbitrum fork stays
+  reserved for the Phase 7 Uniswap API leg, where it is genuinely required.
+  Note: solc binaries live in `~/.local/share/svm/` here (svm honours
+  `XDG_DATA_HOME`), not `~/.svm` — 0.8.26 is already installed.
