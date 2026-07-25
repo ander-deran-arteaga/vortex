@@ -1,17 +1,31 @@
 import type { Address } from "viem";
 
+/**
+ * Contract names as they appear in deployments/<chainId>.json.
+ * Kept in lockstep with coordination/interfaces/contracts.md — blockend
+ * writes addresses as contracts deploy; absent key = not deployed yet.
+ */
 export const CONTRACT_NAMES = [
   "PoolManager",
   "Aqua",
-  "SwapVM",
+  "AquaSwapVMRouter",
+  "MockWBTC",
+  "MockUSDC",
+  "MockReferenceOracle",
+  "MockStalePool",
+  "MockExternalRouter",
+  "VortexAquaPricing",
+  "VortexAquaOrderBuilder",
+  "VortexAquaLens",
+  "VortexAquaRouter",
   "VortexHook",
   "VortexRouter",
   "VortexQuoter",
+  "VortexLiquidityManager",
+  "VortexFeeAuthorization",
   "VortexCompounder",
-  "BestExecutionStrategy",
-  "CompoundStrategy",
-  "MockOracle",
-  "MockExternalRouter",
+  "VortexRouteValidator",
+  "VortexSystemLens",
 ] as const;
 export type ContractName = (typeof CONTRACT_NAMES)[number];
 
@@ -33,3 +47,12 @@ export function getContractAddress(
   }
   return address;
 }
+
+/**
+ * Canonical Vortex event names (master plan §11.2 / §12.5). Solidity and the
+ * indexer both bind to these exact names.
+ */
+export const VORTEX_EVENT_NAMES = {
+  permSwap: "VortexPermSwap",
+  growExecuted: "VortexGrowExecuted",
+} as const;

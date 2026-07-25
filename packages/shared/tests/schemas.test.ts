@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   zAmount,
-  zCompoundScanRequest,
-  zCompoundScanResponse,
+  zApiError,
   zExchangeQuoteRequest,
   zExchangeQuoteResponse,
+  zGrowScanRequest,
+  zGrowScanResponse,
+  zStrategyHealth,
 } from "../src/schemas";
 
 const ADDRESS = "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f";
@@ -52,7 +54,7 @@ describe("zExchangeQuoteRequest", () => {
 });
 
 describe("zExchangeQuoteResponse", () => {
-  it("accepts an Aqua-selected response", () => {
+  it("accepts an Aqua-selected response with fee transparency", () => {
     const parsed = zExchangeQuoteResponse.safeParse({
       quoteSessionId: "quote_1",
       selectedVenue: "AQUA",
@@ -63,7 +65,10 @@ describe("zExchangeQuoteResponse", () => {
           minimumAmountOut: "98700000",
           estimatedGasUsd: "0.12",
           netAmountOut: "98650000",
-          inventoryFeeBps: 4.2,
+          safetyFeeBps: 3,
+          commercialFeeBps: 7,
+          inventoryAdjustmentBps: -1.5,
+          makerCoverageBps: 10_000,
         },
         uniswap: null,
       },
@@ -89,9 +94,9 @@ describe("zExchangeQuoteResponse", () => {
   });
 });
 
-describe("compound schemas", () => {
+describe("grow schemas", () => {
   it("defaults direction to AUTO", () => {
-    const parsed = zCompoundScanRequest.parse({
+    const parsed = zGrowScanRequest.parse({
       chainId: 42161,
       strategyHash: HASH,
       principalAmount: "100000000",
@@ -100,10 +105,61 @@ describe("compound schemas", () => {
   });
 
   it("treats no-opportunity as a valid state", () => {
-    const parsed = zCompoundScanResponse.safeParse({
+    const parsed = zGrowScanResponse.safeParse({
       opportunityFound: false,
-      reason: "FINAL_AMOUNT_BELOW_MINIMUM_PROFIT",
+      reason: "INSUFFICIENT_MINIMUM_PROFIT",
     });
     expect(parsed.success).toBe(true);
+  });
+
+  it("accepts a stale-pool opportunity without a uniswap request id", () => {
+    const parsed = zGrowScanResponse.safeParse({
+      opportunityFound: true,
+      opportunityId: "opp_1",
+      direction: "VORTEX_THEN_EXTERNAL",
+      principalAmount: "100000000",
+      bridgeAmount: "100000000000",
+      maxAssetSpent: "99800000",
+      minFinalAsset: "100240000",
+      minimumProfit: "100000",
+      estimatedGrossProfit: "300000",
+      performanceFee: "30000",
+      expiresAt: 1_753_000_000,
+    });
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe("zStrategyHealth", () => {
+  it("carries executable coverage per token", () => {
+    const parsed = zStrategyHealth.safeParse({
+      strategyHash: HASH,
+      maker: ADDRESS,
+      active: true,
+      solvent: true,
+      coverageBps: 10_000,
+      tokens: [
+        {
+          address: ADDRESS,
+          symbol: "WBTC",
+          virtualBalance: "100000000",
+          actualBalance: "100000000",
+          aquaAllowance: "100000000",
+          executableBalance: "100000000",
+        },
+      ],
+      lastUpdatedBlock: 1,
+    });
+    expect(parsed.success).toBe(true);
+  });
+});
+
+describe("zApiError", () => {
+  it("uses the nested error envelope", () => {
+    expect(
+      zApiError.safeParse({ error: { code: "QUOTE_EXPIRED", message: "expired" } })
+        .success,
+    ).toBe(true);
+    expect(zApiError.safeParse({ error: "QUOTE_EXPIRED" }).success).toBe(false);
   });
 });

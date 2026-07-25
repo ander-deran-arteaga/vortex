@@ -5,6 +5,10 @@ import {
   convertAmount,
   maxInAfterSlippage,
   minOutAfterSlippage,
+  mulDiv,
+  scaleAmount,
+  USDC_DECIMALS,
+  WBTC_DECIMALS,
 } from "../src/units";
 
 describe("bps math", () => {
@@ -22,6 +26,22 @@ describe("bps math", () => {
   it("applies slippage to inputs with ceiling", () => {
     expect(maxInAfterSlippage(1_000_000n, 30)).toBe(1_003_000n);
     expect(maxInAfterSlippage(1n, 1)).toBe(2n);
+  });
+});
+
+describe("decimal safety", () => {
+  it("pins WBTC to 8 and USDC to 6 decimals", () => {
+    expect(WBTC_DECIMALS).toBe(8);
+    expect(USDC_DECIMALS).toBe(6);
+  });
+
+  it("rounds conservatively in the requested direction", () => {
+    expect(mulDiv(10n, 10n, 3n, "floor")).toBe(33n);
+    expect(mulDiv(10n, 10n, 3n, "ceil")).toBe(34n);
+    // Scaling 1 unit of 8-decimals down to 6 decimals loses precision:
+    // floor pays out less, ceil charges more — never the reverse.
+    expect(scaleAmount(199n, 8, 6, "floor")).toBe(1n);
+    expect(scaleAmount(199n, 8, 6, "ceil")).toBe(2n);
   });
 });
 

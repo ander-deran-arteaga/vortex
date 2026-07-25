@@ -1,17 +1,23 @@
-/** Canonical API route paths — frontend and backend both import these. */
+/**
+ * Canonical API route paths (MASTER R-005) — frontend and backend both
+ * import these; never hardcode a path. All endpoints are versioned under
+ * /api/v1.
+ */
+export const API_PREFIX = "/api/v1";
+
 export const API_ROUTES = {
-  health: "/v1/health",
-  config: "/v1/config",
-  strategies: "/v1/strategies",
-  strategyHealth: (strategyHash: string) =>
-    `/v1/strategies/${strategyHash}/health`,
-  exchangeQuote: "/v1/quotes/exchange",
-  uniswapBuild: "/v1/uniswap/build",
-  compoundScan: "/v1/compound/scan",
-  compoundPrepare: "/v1/compound/prepare",
-  compoundExecute: "/v1/compound/execute",
-  executions: "/v1/executions",
-  aquaResolverQuote: "/v1/aqua/quote",
-  aquaResolverBuild: "/v1/aqua/build",
-  demoSeed: "/v1/demo/seed",
+  health: `${API_PREFIX}/health`,
+  config: `${API_PREFIX}/config`,
+  strategies: `${API_PREFIX}/strategies`,
+  strategy: (strategyHash: string) => `${API_PREFIX}/strategies/${strategyHash}`,
+  executions: `${API_PREFIX}/executions`,
+  exchangeQuote: `${API_PREFIX}/quotes/exchange`,
+  transactionsAqua: `${API_PREFIX}/transactions/aqua`,
+  transactionsUniswap: `${API_PREFIX}/transactions/uniswap`,
+  growScan: `${API_PREFIX}/grow/scan`,
+  growPrepare: `${API_PREFIX}/grow/prepare`,
+  growExecute: `${API_PREFIX}/grow/execute`,
+  resolverQuote: `${API_PREFIX}/resolver/quote`,
+  resolverBuild: `${API_PREFIX}/resolver/build`,
+  demoSeed: `${API_PREFIX}/demo/seed`,
 } as const;
