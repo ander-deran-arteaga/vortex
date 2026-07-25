@@ -10,6 +10,8 @@ import type { Address, Hex } from "viem";
 
 import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
 
+import { symbolForAddress } from "./tokenSymbols";
+
 import type {
   AquaQuote,
   AquaQuoteSource,
@@ -144,15 +146,15 @@ export function createFixtureAquaQuoteSource(
         return Promise.resolve(null);
       }
 
+      // Symbol comes from the address, never from the slot the token sits in.
       const token = (
         t: FixtureToken,
-        symbol: string,
         balance: bigint,
       ): StrategyTokenHealth => {
         const executable = bpsOf(balance, config.makerCoverageBps);
         return {
           address: t.address,
-          symbol,
+          symbol: symbolForAddress(t.address),
           virtualBalance: balance.toString(),
           actualBalance: executable.toString(),
           aquaAllowance: executable.toString(),
@@ -167,8 +169,8 @@ export function createFixtureAquaQuoteSource(
         solvent: config.solvent,
         coverageBps: config.makerCoverageBps,
         tokens: [
-          token(config.baseToken, "WBTC", config.baseInventory),
-          token(config.quoteToken, "USDC", config.quoteInventory),
+          token(config.baseToken, config.baseInventory),
+          token(config.quoteToken, config.quoteInventory),
         ],
         lastUpdatedBlock: null,
       });

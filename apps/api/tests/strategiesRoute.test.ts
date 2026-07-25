@@ -192,3 +192,75 @@ describe("default fixture configuration", () => {
     );
   });
 });
+
+describe("token symbols are derived, never assumed from position", () => {
+  it("labels each balance from its address", async () => {
+    built = serve();
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${KNOWN}`,
+    });
+
+    const body = zStrategyHealth.parse(res.json());
+    const bySymbol = new Map(body.tokens.map((t) => [t.symbol, t.address]));
+    expect(bySymbol.get("WBTC")?.toLowerCase()).toBe(WBTC.toLowerCase());
+    expect(bySymbol.get("USDC")?.toLowerCase()).toBe(USDC.toLowerCase());
+  });
+
+  it("does not mislabel a balance when the pair is configured reversed", async () => {
+    // Swapping the base/quote slots must swap the symbols too. Hardcoding the
+    // symbol per position would report the maker's USDC balance as WBTC.
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        uniswapClient: null,
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_COMPETITIVE_FIXTURE,
+          knownStrategyHash: KNOWN,
+          baseToken: { address: USDC as `0x${string}`, decimals: 6 },
+          quoteToken: { address: WBTC as `0x${string}`, decimals: 8 },
+          baseInventory: 65_000_000_000n,
+          quoteInventory: 100_000_000n,
+        }),
+      },
+    );
+
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${KNOWN}`,
+    });
+
+    const body = zStrategyHealth.parse(res.json());
+    // First slot is now USDC, and it must say so.
+    expect(body.tokens[0]!.symbol).toBe("USDC");
+    expect(body.tokens[0]!.address.toLowerCase()).toBe(USDC.toLowerCase());
+    expect(body.tokens[1]!.symbol).toBe("WBTC");
+    expect(body.tokens[1]!.address.toLowerCase()).toBe(WBTC.toLowerCase());
+  });
+
+  it("reports an unknown token honestly instead of guessing", async () => {
+    const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        uniswapClient: null,
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_COMPETITIVE_FIXTURE,
+          knownStrategyHash: KNOWN,
+          quoteToken: { address: WETH as `0x${string}`, decimals: 18 },
+        }),
+      },
+    );
+
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${KNOWN}`,
+    });
+
+    const body = zStrategyHealth.parse(res.json());
+    expect(body.tokens[1]!.symbol).toBe("UNKNOWN");
+    expect(body.tokens[1]!.address.toLowerCase()).toBe(WETH.toLowerCase());
+  });
+});

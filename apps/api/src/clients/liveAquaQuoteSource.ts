@@ -3,6 +3,8 @@ import { decodeErrorResult, type Address, type Hex, type PublicClient } from "vi
 
 import type { StrategyHealth, StrategyTokenHealth } from "@vortex/shared";
 
+import { symbolForAddress } from "./tokenSymbols";
+
 import type {
   AquaQuote,
   AquaQuoteSource,
@@ -176,9 +178,11 @@ export function createLiveAquaQuoteSource(
         ],
       });
 
+      // Symbols are derived from the address, never assumed from position:
+      // labelling a maker's USDC balance "WBTC" because it sat in the quote
+      // slot would misreport money.
       const token = (
         address: Address,
-        symbol: string,
         entry: {
           virtualBalance: bigint;
           actualBalance: bigint;
@@ -187,7 +191,7 @@ export function createLiveAquaQuoteSource(
         },
       ): StrategyTokenHealth => ({
         address,
-        symbol,
+        symbol: symbolForAddress(address),
         virtualBalance: entry.virtualBalance.toString(),
         actualBalance: entry.actualBalance.toString(),
         aquaAllowance: entry.aquaAllowance.toString(),
@@ -201,8 +205,8 @@ export function createLiveAquaQuoteSource(
         solvent: health.solvent,
         coverageBps: clampBps(health.coverageBps),
         tokens: [
-          token(config.baseToken, "WBTC", health.base),
-          token(config.quoteToken, "USDC", health.quote),
+          token(config.baseToken, health.base),
+          token(config.quoteToken, health.quote),
         ],
         lastUpdatedBlock: null,
       };
