@@ -2,12 +2,20 @@
 
 ## Current gate
 
-Phases 0 through 5 have all passed. Phase 6 (Vortex Grow) is one test short of
-exit; Phase 7 (API-powered Grow leg) and Phase 8 (polish and freeze) remain.
+Phases 0 through 6 have all passed. Phase 7 (API-powered Grow leg) is
+deliberately deferred: the Vortex Swap execution path is not yet reachable end
+to end, and finishing it takes priority over new capability.
 
-Verified green at `3efcf09`: **505 tests** — contracts 142, shared 25, api 206
-(plus 1 opt-in fork test), web 132. Both the commit-policy and architecture
-guards pass; 97 commits policy-clean.
+Verified green at `dbeaa11`: **513 tests** — contracts 146, shared 25, api 206
+(plus 1 opt-in fork test), web 135. Both the commit-policy and architecture
+guards pass; 102 commits policy-clean.
+
+**Open gap:** `POST /api/v1/transactions/aqua` is declared in the shared route
+table but not registered, so the Aqua settlement path has no transaction
+builder. The Aqua quote is also still fixture-priced, so it wins every
+comparison and the Uniswap fallback never becomes reachable. Settlement itself
+is proven at the contract layer by 33 Vortex Swap tests moving real ERC-20
+balances; this is a wiring gap between that layer and the interface.
 
 ## Contracts
 - Current task: Phase 6 close-out — a reentrancy test against a malicious
