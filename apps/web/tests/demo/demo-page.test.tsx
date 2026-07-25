@@ -60,9 +60,11 @@ describe("demo page", () => {
       { timeout: 10_000 },
     );
 
-    // The execution step must name the exact missing route, not shrug.
+    // With the whole API down, the execution step reports the true reason —
+    // there is no quote session to execute against — rather than guessing at
+    // which downstream route might be missing.
     expect(
-      screen.getByText(/POST \/api\/v1\/transactions\/aqua is not registered/),
+      screen.getByText(/no quote session to execute against/i),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/POST \/api\/v1\/demo\/seed is not registered/),
@@ -149,6 +151,80 @@ describe("demo page", () => {
     // live even though the Aqua leg beside it is a fixture.
     const table = screen.getByRole("table");
     expect(within(table).getByText("Live data")).toBeInTheDocument();
+  });
+
+  it("reports the builder's own error when the route exists but cannot serve the chain", async () => {
+    // The state right after backend registered transactions/aqua: the route
+    // answers, but no Aqua strategy is deployed on this chain.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.includes("/quotes/exchange")) {
+          return jsonResponse({
+            quoteSessionId: "session-live",
+            selectedVenue: "AQUA",
+            expiresAt: Date.now() + 45_000,
+            comparison: {
+              aqua: {
+                source: "fixture",
+                amountOut: "64948000000",
+                minimumAmountOut: "64753156000",
+                estimatedGasUsd: "0.01",
+                netAmountOut: "64753146273",
+                safetyFeeBps: 5,
+                commercialFeeBps: 3,
+                inventoryAdjustmentBps: 0,
+                makerCoverageBps: 10000,
+              },
+              uniswap: {
+                source: "live",
+                amountOut: "64200142482",
+                minimumAmountOut: "64007542054",
+                estimatedGasUsd: "0.02",
+                netAmountOut: "64007520821",
+                requestId: "req-abc",
+              },
+            },
+            execution: {
+              kind: "AQUA_SWAPVM",
+              order: null,
+              amount: "100000000",
+              takerTraitsAndData: "0x",
+            },
+          });
+        }
+        if (url.includes("/transactions/aqua")) {
+          return jsonResponse(
+            {
+              error: {
+                code: "AQUA_EXECUTION_UNAVAILABLE",
+                message: "no Aqua strategy is deployed on this chain; quotes are simulated",
+              },
+            },
+            503,
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    await renderDemo();
+    await user.click(screen.getByRole("button", { name: /run the demo/i }));
+
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText(/AQUA_EXECUTION_UNAVAILABLE/),
+        ).toBeInTheDocument();
+      },
+      { timeout: 10_000 },
+    );
+    // It reports the deployment gap, not a stale "route not registered" guess.
+    expect(
+      screen.queryByText(/transactions\/aqua is not registered/),
+    ).toBeNull();
   });
 
   it("shows an empty evidence panel before a run", async () => {

@@ -2,7 +2,7 @@ import { API_ROUTES, type ConfigResponse } from "@vortex/shared";
 import { z } from "zod";
 import { apiRequest } from "@/lib/api/client";
 import { fetchConfig, fetchExchangeQuote, scanGrowOpportunity } from "@/lib/api/endpoints";
-import { ApiUnavailableError } from "@/lib/api/errors";
+import { ApiRequestError, ApiUnavailableError } from "@/lib/api/errors";
 import { FIXTURE_GROW_STRATEGY_HASH, FIXTURE_STRATEGY_HASH } from "@/lib/api/fixtures";
 import { WBTC, USDC } from "@vortex/shared";
 import type { DemoStepId, DemoStepOutcome } from "./demoMachine";
@@ -155,24 +155,73 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
     title: "Execute the Vortex Swap best-execution trade",
     description:
       "Route the taker's WBTC through whichever venue nets more after gas, and settle it onchain.",
-    run: async () => {
-      // Probe rather than assume: this step unblocks itself the moment the
-      // builder is registered.
-      const registered = await isRouteRegistered(API_ROUTES.transactionsAqua, {
-        quoteSessionId: "capability-probe",
-      });
-      if (!registered) {
+    run: async (ctx) => {
+      // Attempt the real build rather than guessing at capability. The session
+      // consumed here is one this step created, so nothing else is disturbed,
+      // and the step reports whatever actually came back — including which
+      // layer is missing.
+      let sessionId: string;
+      let venue: string;
+      try {
+        const quote = await fetchExchangeQuote(
+          {
+            chainId: ctx.chainId,
+            strategyHash: FIXTURE_STRATEGY_HASH,
+            tokenIn: WBTC.address,
+            tokenOut: USDC.address,
+            amountIn: "100000000",
+            taker: "0x0000000000000000000000000000000000000000",
+            slippageBps: 30,
+          },
+          { now: ctx.now() },
+        );
+        if (quote.source === "fixture") {
+          return {
+            kind: "blocked",
+            reason:
+              "The comparator is unreachable, so there is no quote session to execute against.",
+          };
+        }
+        sessionId = quote.data.quoteSessionId;
+        venue = quote.data.selectedVenue;
+      } catch (error) {
         return {
-          kind: "blocked",
-          reason:
-            "POST /api/v1/transactions/aqua is not registered, so the winning venue has no transaction builder. Aqua wins every quote today, so the Uniswap builder correctly answers NOT_A_UNISWAP_SESSION.",
+          kind: "failure",
+          reason: error instanceof Error ? error.message : "Could not obtain a quote.",
         };
       }
-      return {
-        kind: "blocked",
-        reason:
-          "The Aqua transaction builder is live. Browser-side broadcast wiring is the next frontend step and is deliberately not written yet.",
-      };
+
+      const route =
+        venue === "AQUA" ? API_ROUTES.transactionsAqua : API_ROUTES.transactionsUniswap;
+      try {
+        await apiRequest(route, {
+          method: "POST",
+          body: { quoteSessionId: sessionId },
+          schema: z.unknown(),
+        });
+        return {
+          kind: "success",
+          outcome: {
+            detail: `${venue} transaction built for session ${sessionId}. Broadcasting it needs a connected wallet.`,
+            source: "live",
+          },
+        };
+      } catch (error) {
+        if (error instanceof ApiUnavailableError) {
+          return {
+            kind: "blocked",
+            reason: `${route} is not registered, so the winning venue has no transaction builder.`,
+          };
+        }
+        if (error instanceof ApiRequestError) {
+          // The builder answered — it just cannot serve this chain or session.
+          return { kind: "blocked", reason: `${error.code}: ${error.message}` };
+        }
+        return {
+          kind: "failure",
+          reason: error instanceof Error ? error.message : "The build failed.",
+        };
+      }
     },
   },
   {
