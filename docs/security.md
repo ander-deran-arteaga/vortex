@@ -46,16 +46,25 @@ floors.
 - Shipped strategies are immutable; docked strategies refuse read/push/pull.
 - Pull beyond virtual balance reverts even with unlimited ERC20 approval.
 
-### Phase 2 — Vortex Swap (planned, §8.2)
-- quote() == swap() amounts for identical inputs (single view pricing path).
-- finalFee >= immutable safety floor for every reachable input.
-- Post-trade inventory inside hard bounds or revert.
-- amountOut <= executable balance or revert.
-- Rounding always favors the maker (VortexTokenMath floor/ceil discipline).
-- Signed rebate: bound-clamped, deadline-scoped, bound to
-  taker/orderHash/amount/quoteId, and nonce-protected — the nonce is consumed
-  on the swap path and verified-unused on the static quote path (the
-  Extruction target is only forced to be `view` in static context).
+### Phase 2 — Vortex Swap (ENFORCED — test/aqua/VortexSwap.t.sol, 17 tests +
+###   VortexProgramEncoding.t.sol pin, all green through real settlement)
+- quote() == swap() amounts for identical inputs (one pricing path serves
+  both; the router staticcalls the same function in quote context).
+- finalFee >= immutable safety floor + minCommercial for every reachable
+  input; a 100% rebate cannot pierce it (test_rebateCannotRemoveSafetyFee).
+- Post-trade base weight inside immutable hard bounds or revert.
+- amountOut <= virtual balance AND <= min(wallet, allowance) or revert —
+  phantom liquidity cannot settle (insufficient balance/allowance tests).
+- Rounding always favors the maker: outputs floored, inputs ceiled, dust
+  trades revert rather than round in the taker's favor.
+- Trade size capped at maxTradeBps of portfolio value (fraction rounded UP).
+- Recentring flow prices below worsening flow (inventory adjustment sign).
+- Signed rebate: clamped, deadline-scoped, EIP-712-bound to
+  taker/orderHash/tokens/amount/direction per shared typedData.ts, and
+  nonce-protected — consumed on swap, verified-unused on static quote;
+  extruction is ROUTER-gated so third parties cannot burn taker nonces.
+- Program encoding pinned byte-for-byte to the official v1.0.1 opcode table
+  (dispatch indices Deadline=13, Salt=20, Extruction=32).
 
 ### Phase 5 — Vortex PermAMM (planned, §8.3)
 - Dynamic-fee pool only; external liquidity forbidden (single managed position).
