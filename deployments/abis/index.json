@@ -1,0 +1,14 @@
+{
+  "commit": "dda654b",
+  "contracts": {
+    "Aqua": 17,
+    "AquaSwapVMRouter": 74,
+    "VortexAquaPricing": 35,
+    "VortexAquaOrderBuilder": 17,
+    "VortexAquaLens": 9,
+    "MockReferenceOracle": 11,
+    "MockERC20": 19,
+    "MockWBTC": 19,
+    "MockUSDC": 19
+  }
+}

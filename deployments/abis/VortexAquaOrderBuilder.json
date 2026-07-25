@@ -1,0 +1,410 @@
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "pricing",
+          "type": "address",
+          "internalType": "contract VortexAquaPricing"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "PRICING",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract VortexAquaPricing"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "buildOrder",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "internalType": "struct VortexAquaOrderBuilder.VortexSwapStrategyParams",
+          "components": [
+            {
+              "name": "maker",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "baseToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "quoteToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "referenceOracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "rebateSigner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "minSafetyFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "defaultCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "minCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "inventoryStrengthBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxTradeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "minBaseWeightBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxBaseWeightBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxOracleSpreadBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxOracleAge",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "strategyDeadline",
+              "type": "uint40",
+              "internalType": "uint40"
+            },
+            {
+              "name": "salt",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "name": "order",
+          "type": "tuple",
+          "internalType": "struct ISwapVM.Order",
+          "components": [
+            {
+              "name": "maker",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "traits",
+              "type": "uint256",
+              "internalType": "MakerTraits"
+            },
+            {
+              "name": "data",
+              "type": "bytes",
+              "internalType": "bytes"
+            }
+          ]
+        },
+        {
+          "name": "strategyHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "buildProgram",
+      "inputs": [
+        {
+          "name": "strategyDeadline",
+          "type": "uint40",
+          "internalType": "uint40"
+        },
+        {
+          "name": "cfg",
+          "type": "tuple",
+          "internalType": "struct VortexSwapConfig",
+          "components": [
+            {
+              "name": "baseToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "quoteToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "referenceOracle",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "rebateSigner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "baseDecimals",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "quoteDecimals",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "minSafetyFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "defaultCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "minCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxCommercialFeeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "inventoryStrengthBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxTradeBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "minBaseWeightBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxBaseWeightBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxOracleSpreadBps",
+              "type": "uint16",
+              "internalType": "uint16"
+            },
+            {
+              "name": "maxOracleAge",
+              "type": "uint32",
+              "internalType": "uint32"
+            }
+          ]
+        },
+        {
+          "name": "salt",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "error",
+      "name": "MakerTraitsMissingHasPostTransferInFlag",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MakerTraitsMissingHasPostTransferOutFlag",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MakerTraitsMissingHasPreTransferInFlag",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "MakerTraitsMissingHasPreTransferOutFlag",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SafeCastOverflowedUintDowncast",
+      "inputs": [
+        {
+          "name": "bits",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "value",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexBadFeeBand",
+      "inputs": [
+        {
+          "name": "minCommercialBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "defaultCommercialBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "maxCommercialBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexBadWeightBand",
+      "inputs": [
+        {
+          "name": "minBaseWeightBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "maxBaseWeightBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexBpsOutOfRange",
+      "inputs": [
+        {
+          "name": "maxTradeBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        },
+        {
+          "name": "inventoryStrengthBps",
+          "type": "uint16",
+          "internalType": "uint16"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexExpiredStrategyDeadline",
+      "inputs": [
+        {
+          "name": "strategyDeadline",
+          "type": "uint40",
+          "internalType": "uint40"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexFeeCeilingTooHigh",
+      "inputs": [
+        {
+          "name": "worstCaseFeeBps",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexIdenticalTokens",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexUnsupportedDecimals",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "decimals",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "VortexZeroAddress",
+      "inputs": []
+    }
+  ]
+}
