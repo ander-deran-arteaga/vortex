@@ -17,7 +17,7 @@ export function registerConfigRoutes(
     contracts: ctx.deployment.contracts as ConfigResponse["contracts"],
     features: {
       // Grow execution stays off until Phase 6 opens the compound route.
-      compoundEnabled: false,
+      growEnabled: false,
       demoMode: ctx.env.DEMO_MODE,
     },
   }));

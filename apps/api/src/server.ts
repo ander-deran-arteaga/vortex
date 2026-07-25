@@ -23,7 +23,7 @@ export function buildServer(
 
   app.register(cors, { origin: true });
 
-  app.setErrorHandler((err, _req, reply) => {
+  app.setErrorHandler((err: unknown, _req, reply) => {
     if (err instanceof ZodError) {
       return reply.status(400).send({
         error: {
@@ -33,14 +33,20 @@ export function buildServer(
         },
       });
     }
+    const e = err as { statusCode?: unknown; code?: unknown; message?: unknown };
     const status =
-      typeof err.statusCode === "number" && err.statusCode >= 400
-        ? err.statusCode
+      typeof e.statusCode === "number" && e.statusCode >= 400
+        ? e.statusCode
         : 500;
     return reply.status(status).send({
       error: {
-        code: err.code ?? "INTERNAL_ERROR",
-        message: status >= 500 ? "internal error" : err.message,
+        code: typeof e.code === "string" ? e.code : "INTERNAL_ERROR",
+        message:
+          status >= 500
+            ? "internal error"
+            : typeof e.message === "string"
+              ? e.message
+              : "request failed",
       },
     });
   });

@@ -24,7 +24,7 @@ describe(`GET ${API_ROUTES.config}`, () => {
     expect(bySymbol.get("USDC")?.decimals).toBe(6);
 
     expect(body.contracts).toEqual(built.ctx.deployment.contracts);
-    expect(body.features.compoundEnabled).toBe(false);
+    expect(body.features.growEnabled).toBe(false);
     expect(body.features.demoMode).toBe(false);
   });
 
