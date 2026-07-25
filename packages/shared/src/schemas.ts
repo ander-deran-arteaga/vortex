@@ -128,6 +128,34 @@ export const zUniswapBuildResponse = z.object({
 });
 export type UniswapBuildResponse = z.infer<typeof zUniswapBuildResponse>;
 
+/** Exchanges an Aqua-selected quote session for direct SwapVM calldata. */
+export const zAquaBuildRequest = z.object({
+  quoteSessionId: z.string().min(1),
+});
+export type AquaBuildRequest = z.infer<typeof zAquaBuildRequest>;
+
+/**
+ * A ready-to-broadcast Aqua + SwapVM transaction. The browser signs and sends
+ * `to`/`data`/`value` unchanged — it never reconstructs the order itself.
+ */
+export const zAquaBuildResponse = z.object({
+  /** The official AquaSwapVMRouter. */
+  to: zAddress,
+  data: zHex,
+  value: zAmount,
+  gasLimit: zAmount.nullable(),
+  /**
+   * The floor bound into the calldata, not merely displayed: the router
+   * reverts rather than settling below it, so a stale quote cannot fill worse
+   * than the taker was shown.
+   */
+  minimumAmountOut: zAmount,
+  strategyHash: zBytes32,
+  /** The taker must approve this address for tokenIn before broadcasting. */
+  spender: zAddress,
+});
+export type AquaBuildResponse = z.infer<typeof zAquaBuildResponse>;
+
 // ── Vortex Grow ────────────────────────────────────────────────────
 
 export const zGrowScanRequest = z.object({
