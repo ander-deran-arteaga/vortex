@@ -46,16 +46,37 @@ done
 [[ "$(cast chain-id --rpc-url "$RPC" 2>/dev/null)" == "31337" ]] \
   || { echo "rpc at $RPC is not our 31337 chain (port in use by something else?)" >&2; exit 1; }
 
-echo "==> deploying Vortex baseline"
+# CANONICAL ORDER — do not reorder or run these individually.
+#
+# Every script deploys with CREATE, so contract addresses depend on the
+# deployer's nonce, which means they depend on WHICH SCRIPTS RAN BEFORE.
+# Running SeedDemo between DeployLocal and DeployPermAMM shifts every PermAMM
+# address. One entrypoint with a fixed order is what makes the committed
+# deployments/31337.json reproducible for everyone.
+echo "==> 1/3 deploying Vortex baseline (Aqua, SwapVM router, tokens, oracle, Vortex Swap)"
 (
   cd "$ROOT/packages/contracts"
   DEPLOY_OUT="$DEPLOY_OUT" forge script script/DeployLocal.s.sol \
-    --rpc-url "$RPC" \
-    --private-key "$DEPLOYER_KEY" \
-    --broadcast
+    --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
+)
+
+echo "==> 2/3 seeding the demo Vortex Swap strategy"
+(
+  cd "$ROOT/packages/contracts"
+  forge script script/SeedDemo.s.sol \
+    --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
+)
+
+echo "==> 3/3 deploying Vortex PermAMM (real v4 PoolManager, hook, pool)"
+(
+  cd "$ROOT/packages/contracts"
+  forge script script/DeployPermAMM.s.sol \
+    --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
 )
 
 echo "==> deployments/${DEPLOY_OUT} refreshed:"
 cat "$ROOT/deployments/${DEPLOY_OUT}"
+echo "==> demo strategy:"
+cat "$ROOT/deployments/31337.demo.json" 2>/dev/null || true
 echo "==> chain ready at $RPC (Ctrl-C to stop)"
 wait "$ANVIL_PID"
