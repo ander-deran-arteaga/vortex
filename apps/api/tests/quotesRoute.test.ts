@@ -310,12 +310,20 @@ describe(`POST ${API_ROUTES.transactionsUniswap}`, () => {
       url: API_ROUTES.executions,
     });
     const { executions } = res.json() as {
-      executions: { uniswapRequestId: string | null; kind: string }[];
+      executions: {
+        uniswapRequestId: string | null;
+        kind: string;
+        txHash: string | null;
+        amountOut: string | null;
+      }[];
     };
 
     expect(executions).toHaveLength(1);
     expect(executions[0]!.kind).toBe("BEST_EXECUTION_UNISWAP");
     expect(executions[0]!.uniswapRequestId).toBe("req-uniswap-1");
+    // Built, not settled: a quoted amount must never look like a fill.
+    expect(executions[0]!.txHash).toBeNull();
+    expect(executions[0]!.amountOut).toBeNull();
   });
 
   it("refuses to reuse a session — quotes are single-use", async () => {

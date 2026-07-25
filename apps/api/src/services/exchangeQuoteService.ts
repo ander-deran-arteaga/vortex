@@ -82,16 +82,36 @@ async function loadUniswapQuote(
   });
 }
 
+/**
+ * Aqua settles onchain and pays gas like any other venue. Its cost in USD is
+ * scaled off Uniswap's stated `gasFeeUSD` by the gas-units ratio — the same
+ * reference trick the comparator uses, so the figure shown to the taker
+ * matches the figure the comparator actually charged it.
+ */
+function aquaGasUsd(
+  aquaGasUnits: bigint,
+  uniswapQuote: UniswapQuote | null,
+): string {
+  if (!uniswapQuote || uniswapQuote.gasUnits <= 0n || !uniswapQuote.gasFeeUSD) {
+    return "0";
+  }
+  const uniswapUsd = Number(uniswapQuote.gasFeeUSD);
+  if (!Number.isFinite(uniswapUsd)) return "0";
+  const ratio = Number(aquaGasUnits) / Number(uniswapQuote.gasUnits);
+  return String(uniswapUsd * ratio);
+}
+
 function toAquaComparison(
   quote: AquaQuote,
   compared: ComparisonResult["aqua"],
   source: QuoteSource,
+  uniswapQuote: UniswapQuote | null,
 ): AquaComparison {
   return {
     source,
     amountOut: quote.amountOut.toString(),
     minimumAmountOut: quote.minimumAmountOut.toString(),
-    estimatedGasUsd: "0",
+    estimatedGasUsd: aquaGasUsd(quote.gasUnits, uniswapQuote),
     netAmountOut: (compared?.netAmountOut ?? 0n).toString(),
     safetyFeeBps: quote.safetyFeeBps,
     commercialFeeBps: quote.commercialFeeBps,
@@ -175,7 +195,14 @@ export async function quoteExchange(
     selectedVenue === "AQUA"
       ? {
           kind: "AQUA_SWAPVM",
-          order: { strategyHash: aquaQuote?.strategyHash ?? params.strategyHash },
+          // The quoted floor travels with the order so settlement can be bound
+          // to what the taker was shown. The full SwapVM Order tuple lands
+          // here once blockend publishes a seeded strategy.
+          order: {
+            strategyHash: aquaQuote?.strategyHash ?? params.strategyHash,
+            minimumAmountOut: (aquaQuote?.minimumAmountOut ?? 0n).toString(),
+            source: deps.aquaSource.kind,
+          },
           amount: params.amountIn.toString(),
           takerTraitsAndData: "0x",
         }
@@ -192,7 +219,12 @@ export async function quoteExchange(
     expiresAt: session.expiresAt,
     comparison: {
       aqua: aquaQuote
-        ? toAquaComparison(aquaQuote, comparison.aqua, deps.aquaSource.kind)
+        ? toAquaComparison(
+            aquaQuote,
+            comparison.aqua,
+            deps.aquaSource.kind,
+            uniswapQuote,
+          )
         : null,
       uniswap: uniswapQuote
         ? toUniswapComparison(uniswapQuote, comparison.uniswap)

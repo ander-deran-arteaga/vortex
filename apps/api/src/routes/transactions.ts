@@ -74,6 +74,10 @@ export function registerTransactionRoutes(
           : {}),
       });
 
+      // Nothing has settled yet — the taker still has to sign and broadcast.
+      // amountOut and txHash stay null so a quoted figure is never mistaken
+      // for a fill; `txHash === null` is the "not settled" signal consumers
+      // read. Settlement is confirmed separately via getSwapStatus.
       ctx.executions.recordExecution({
         kind: "BEST_EXECUTION_UNISWAP",
         chainId: request.chainId,
@@ -81,7 +85,7 @@ export function registerTransactionRoutes(
         tokenIn: request.tokenIn,
         tokenOut: request.tokenOut,
         amountIn: request.amountIn.toString(),
-        amountOut: uniswap.amountOut.toString(),
+        amountOut: null,
         uniswapRequestId: uniswap.requestId,
       });
 
