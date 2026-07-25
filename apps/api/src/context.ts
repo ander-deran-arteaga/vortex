@@ -1,6 +1,11 @@
 import type { DeploymentFile } from "@vortex/shared";
 
-import { createFixtureAquaQuoteSource } from "./clients/fixtureAquaQuoteSource";
+import {
+  AQUA_COMPETITIVE_FIXTURE,
+  AQUA_UNCOMPETITIVE_FIXTURE,
+  createFixtureAquaQuoteSource,
+  type FixtureAquaConfig,
+} from "./clients/fixtureAquaQuoteSource";
 import {
   createUniswapApiClient,
   type UniswapApiClient,
@@ -38,6 +43,15 @@ export interface BuildContextOverrides {
 
 const API_ROOT = new URL("../", import.meta.url).pathname;
 
+const AQUA_FIXTURE_PROFILES: Record<
+  Env["AQUA_FIXTURE_PROFILE"],
+  Partial<FixtureAquaConfig>
+> = {
+  competitive: AQUA_COMPETITIVE_FIXTURE,
+  uncompetitive: AQUA_UNCOMPETITIVE_FIXTURE,
+  stale: { ...AQUA_COMPETITIVE_FIXTURE, forcedReason: "VortexStaleOracle" },
+};
+
 export function buildContext(
   overrides: EnvOverrides = {},
   deps: BuildContextOverrides = {},
@@ -61,7 +75,11 @@ export function buildContext(
     deployment: loadDeployment(env.CHAIN_ID),
     startedAt: Date.now(),
     exchange: {
-      aquaSource: deps.aquaSource ?? createFixtureAquaQuoteSource(),
+      aquaSource:
+        deps.aquaSource ??
+        createFixtureAquaQuoteSource(
+          AQUA_FIXTURE_PROFILES[env.AQUA_FIXTURE_PROFILE],
+        ),
       uniswapClient,
       sessions: deps.sessions ?? createQuoteSessionStore<ExchangeSessionPayload>(),
     },

@@ -22,6 +22,13 @@ const zEnv = z.object({
   ROUTE_SIGNER_PRIVATE_KEY: z.string().optional(),
   SOLVER_PRIVATE_KEY: z.string().optional(),
   STORE_DIR: z.string().default("./data"),
+  /**
+   * Which deterministic Aqua fixture the comparison uses until blockend's live
+   * strategy is wired. Lets the demo show either venue winning on demand.
+   */
+  AQUA_FIXTURE_PROFILE: z
+    .enum(["competitive", "uncompetitive", "stale"])
+    .default("competitive"),
   DEMO_MODE: z
     .enum(["true", "false"])
     .default("false")
