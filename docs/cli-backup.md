@@ -9,6 +9,13 @@ aborts instead of printing a plausible-looking number.
 All commands run from `packages/contracts` against the local chain on
 `http://127.0.0.1:8545`. `$PK` is anvil account #0.
 
+**About the figures below.** They are from a freshly bootstrapped chain. On a
+chain that has been demoed against they will differ by a few tenths of a
+percent, because the pricing is inventory-aware: every fill shifts the maker's
+book and the next quote reflects it. That drift is the feature, not an error —
+what stays exact is that **the quote equals the fill**, which each script
+asserts. Use `CheckDemoReady` (below) to judge chain state, not these numbers.
+
 ```bash
 PK=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 RPC=http://127.0.0.1:8545
@@ -118,11 +125,12 @@ scenario cannot silently take the pool down with it.
 forge script script/QuoteDemo.s.sol --rpc-url $RPC        # what the maker quotes right now
 ```
 
-**Check this before demoing.** The scenario in section 3 is persistent chain
-state, so a chain left in `UNISWAP_WINS` will make the maker look uncompetitive
-in the headline best-execution scene. The competitive baseline quotes about
-**99,580 USDC/WBTC**; roughly **96,700** means the de-tuned scenario is still
-applied. Reset with `SCENARIO=AQUA_WINS` before the run.
+Useful for eyeballing what the maker is quoting, but **do not infer the
+scenario from this number** — inventory drift moves it. The pre-flight reads the
+oracle mid directly and is exact; that is the authoritative check. As a rough
+sanity signal the competitive baseline sits near **99,000** and the de-tuned
+scenario near **96,000**, about 3% apart, while inventory drift is well under
+1%.
 
 ## Known limitation: coverage is per strategy, not per maker
 
