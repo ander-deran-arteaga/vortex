@@ -26,5 +26,10 @@ apps/api/data/
 coordination/
 .agents/
 
+# throwaway investigation tests — probes belong in the scratchpad, never in the
+# committed suite. Name them *.probe.test.ts / scratch.* and they cannot leak.
+*.probe.test.ts
+**/scratch.*.test.ts
+
 # misc
 .DS_Store
