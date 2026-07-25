@@ -442,6 +442,27 @@ contract VortexHookTest is Test {
         );
     }
 
+    /// @notice The judge-demo scenario moves the oracle 3% to make the maker
+    ///         genuinely uncompetitive (script/SetDemoScenario.s.sol). That
+    ///         move must NOT break the PermAMM pool or Vortex Grow, which share
+    ///         this oracle — otherwise flipping the demo would take the other
+    ///         two products down with it.
+    /// @dev Pins the scenario's headroom: 3% moved vs the hook's 500 bps
+    ///      deviation cap. If either number changes, this fails rather than the
+    ///      demo failing live.
+    function test_demoScenarioOracleMoveIsWithinTolerance() public {
+        uint256 scenarioMid = 97_000e18; // SetDemoScenario UNISWAP_WINS
+        oracle.setPrice(scenarioMid, scenarioMid * 9_995 / 10_000, scenarioMid * 10_005 / 10_000);
+
+        // The pool is still initialised at 100k; a 3% gap must remain tradeable.
+        uint128 amountIn = wbtcIsCurrency0 ? 0.01e8 : 1_000e6;
+        uint256 amountOut = _swapExactIn(amountIn, true, 1_000);
+        assertGt(amountOut, 0, "3% oracle move must not stop PermAMM swaps");
+
+        assertLt(uint256(hook.MAX_POOL_DEVIATION_BPS()), 10_000);
+        assertGt(uint256(hook.MAX_POOL_DEVIATION_BPS()), 300, "cap must exceed the scenario move");
+    }
+
     function test_oracleSnapshotMismatchReverts() public {
         VortexPermFeeAuthorization memory auth = _auth(true, -int256(uint256(uint128(0.01e8))), 1_000);
         auth.oracleSnapshotHash = keccak256("a price that was never quoted");
