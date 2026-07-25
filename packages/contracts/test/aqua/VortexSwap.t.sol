@@ -2,12 +2,14 @@
 pragma solidity 0.8.30;
 
 import { Test } from "forge-std/Test.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 import { ISwapVM } from "@1inch/swap-vm/src/interfaces/ISwapVM.sol";
 import { AquaSwapVMRouter } from "@1inch/swap-vm/src/routers/AquaSwapVMRouter.sol";
 import { TakerTraitsLib } from "@1inch/swap-vm/src/libs/TakerTraits.sol";
+import { SwapQuery, SwapRegisters } from "@1inch/swap-vm/src/libs/VM.sol";
 
 import {
     VortexAquaPricing,
@@ -17,6 +19,7 @@ import {
 } from "../../src/aqua/VortexAquaPricing.sol";
 import { VortexAquaOrderBuilder } from "../../src/aqua/VortexAquaOrderBuilder.sol";
 import { VortexAquaLens } from "../../src/aqua/VortexAquaLens.sol";
+import { IVortexReferenceOracle } from "../../src/interfaces/IVortexReferenceOracle.sol";
 import { MockReferenceOracle } from "../../src/mocks/MockReferenceOracle.sol";
 import { MockERC20 } from "../../src/mocks/MockERC20.sol";
 import { MockUSDC } from "../../src/mocks/MockUSDC.sol";
@@ -31,6 +34,13 @@ contract VortexSwapTest is Test {
     uint256 internal constant MID = 100_000e18;
     uint256 internal constant BID = 99_950e18;
     uint256 internal constant ASK = 100_050e18;
+
+    /// @dev keccak256 of the VortexQuoteAuthorization type string built from
+    ///      packages/shared/src/typedData.ts (master-owned source of truth).
+    ///      Independently computed with `cast keccak`, NOT copied from the
+    ///      contract — this is what pins Solidity to the shared definition.
+    bytes32 internal constant CANONICAL_QUOTE_AUTHORIZATION_TYPEHASH =
+        0x471f6d550c6ee5b718abd43f88529d1f9e4b53e2947c13b05699d69fdc6b1879;
 
     Aqua internal aqua;
     AquaSwapVMRouter internal router;
@@ -210,9 +220,12 @@ contract VortexSwapTest is Test {
     }
 
     function _signAuth(VortexQuoteAuthorization memory auth, uint256 key) internal view returns (bytes memory) {
+        // Signed with the CANONICAL typehash constant, not the contract's own
+        // getter — otherwise a drifted contract would sign and verify with the
+        // same wrong hash and the test could never catch it.
         bytes32 structHash = keccak256(
             abi.encode(
-                pricing.QUOTE_AUTHORIZATION_TYPEHASH(),
+                CANONICAL_QUOTE_AUTHORIZATION_TYPEHASH,
                 auth.orderHash,
                 auth.quoteId,
                 auth.competitorQuoteHash,
@@ -477,15 +490,27 @@ contract VortexSwapTest is Test {
     function test_roundingFavorsMaker() public {
         (ISwapVM.Order memory order,) = _shipDefault();
 
-        // Exact-out of 1 satoshi: the charged USDC must be worth >= the sat at ask.
+        // Exact-out of 1 satoshi. Compare against the FEE-INCLUSIVE ceiling,
+        // not raw fair value — the fee alone would mask a rounding regression.
         (uint256 satIn,) = _quote(order, address(usdc), address(wbtc), 1, false);
-        uint256 satInValueE18 = satIn * 1e12;
-        uint256 satFairValueE18 = ASK / 1e8;
-        assertGe(satInValueE18, satFairValueE18, "exact-out ceil charges at least fair value");
+
+        // fee here: fraction rounds up to 1 bp, adj = 1000*(0+1)/10000 = 0,
+        // so fee = 5 + 20 = 25 bps. Required = ceil(ceil(sat/0.9975) * ask).
+        uint256 grossE18 = Math.mulDiv(1e10, 10_000, 10_000 - 25, Math.Rounding.Ceil);
+        uint256 requiredE18 = Math.mulDiv(grossE18, ASK, 1e18, Math.Rounding.Ceil);
+        uint256 requiredUsdc = Math.ceilDiv(requiredE18, 1e12);
+        assertEq(satIn, requiredUsdc, "exact-out charge is the exact fee-inclusive ceiling");
 
         // Exact-in dust: the delivered sats can never exceed fair value at ask.
         (, uint256 dustOut) = _quote(order, address(usdc), address(wbtc), 2_000, true);
         assertLe(dustOut * ASK / 1e8, 2_000 * 1e12, "exact-in floor never over-delivers");
+
+        // Bid side (WBTC in, USDC out), exact-out: same discipline in reverse —
+        // the maker must never hand over base worth less than it charges for.
+        (uint256 satsCharged,) = _quote(order, address(wbtc), address(usdc), 1, false);
+        uint256 grossQuoteE18 = Math.mulDiv(1e12, 10_000, 10_000 - 25, Math.Rounding.Ceil);
+        uint256 requiredSatsE18 = Math.mulDiv(grossQuoteE18, 1e18, BID, Math.Rounding.Ceil);
+        assertEq(satsCharged, Math.ceilDiv(requiredSatsE18, 1e10), "bid-side exact-out charge is exact");
     }
 
     function test_insufficientActualMakerBalanceReverts() public {
@@ -533,6 +558,278 @@ contract VortexSwapTest is Test {
             )
         );
         ISwapVM(address(router)).quote(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, ""));
+    }
+
+    function test_typehashMatchesSharedDefinition() public view {
+        // Solidity must hash exactly what packages/shared/src/typedData.ts
+        // declares — same fields, same types, same ORDER.
+        assertEq(
+            pricing.QUOTE_AUTHORIZATION_TYPEHASH(),
+            CANONICAL_QUOTE_AUTHORIZATION_TYPEHASH,
+            "typehash drifted from shared typedData.ts"
+        );
+    }
+
+    function test_askSideSwapMovesRealTokens() public {
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
+
+        uint256 makerWbtcBefore = wbtc.balanceOf(maker);
+        uint256 takerUsdcBefore = usdc.balanceOf(taker);
+
+        // Buy WBTC with 10,000 USDC against a balanced 200k book:
+        //   trade fraction = 10,000 / 200,000 = 500 bps, skew = 0
+        //   inventory adj  = 1000 * (0 + 500) / 10,000       = 50 bps
+        //   fee            = 5 safety + clamp(20 + 50)       = 75 bps
+        //   gross out      = 10,000 / 100,050 (ask)          = 0.099950024 WBTC
+        //   net out        = gross * 0.9925, floored to sats = 9,920,039 sats
+        (uint256 amountIn, uint256 amountOut) = _swap(order, address(usdc), address(wbtc), 10_000e6, true, "");
+
+        assertEq(amountIn, 10_000e6);
+        assertEq(amountOut, 9_920_039, "hand-computed ask-side output");
+
+        assertEq(usdc.balanceOf(taker), takerUsdcBefore - amountIn);
+        assertEq(wbtc.balanceOf(maker), makerWbtcBefore - amountOut);
+        assertEq(wbtc.balanceOf(taker), 10e8 + amountOut);
+
+        (uint256 virtualWbtc, uint256 virtualUsdc) =
+            aqua.safeBalances(maker, address(router), strategyHash, address(wbtc), address(usdc));
+        assertEq(virtualWbtc, 1e8 - amountOut);
+        assertEq(virtualUsdc, 100_000e6 + amountIn);
+    }
+
+    function test_quoteWithRebateDoesNotConsumeNonce() public {
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
+
+        bytes memory rebateArgs =
+            _rebateArgs(strategyHash, address(wbtc), address(usdc), 0.1e8, true, 50, 21, rebateSignerKey);
+
+        vm.prank(taker);
+        (, uint256 quotedOut,) = ISwapVM(address(router)).quote(
+            order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, rebateArgs)
+        );
+        assertFalse(pricing.usedQuoteNonces(taker, 21), "quote must not burn the nonce");
+
+        (, uint256 swappedOut) = _swap(order, address(wbtc), address(usdc), 0.1e8, true, rebateArgs);
+        assertEq(swappedOut, quotedOut, "rebated quote equals rebated fill");
+        assertTrue(pricing.usedQuoteNonces(taker, 21), "swap burns the nonce");
+    }
+
+    function test_expiredRebateReverts() public {
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
+
+        bytes memory rebateArgs =
+            _rebateArgs(strategyHash, address(wbtc), address(usdc), 0.1e8, true, 50, 31, rebateSignerKey);
+
+        vm.warp(block.timestamp + 6 minutes); // auth TTL is 5 minutes
+
+        vm.prank(taker);
+        vm.expectPartialRevert(VortexAquaPricing.VortexRebateExpired.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, rebateArgs));
+    }
+
+    function test_rebateBoundToSignedAmountAndTaker() public {
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
+
+        // Signed for 0.1 WBTC; executing 0.05 must not reuse the authorization.
+        bytes memory wrongAmount =
+            _rebateArgs(strategyHash, address(wbtc), address(usdc), 0.1e8, true, 50, 41, rebateSignerKey);
+        vm.prank(taker);
+        vm.expectRevert(VortexAquaPricing.VortexRebateMismatch.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.05e8, _takerTraitsAndData(true, wrongAmount));
+
+        // Signed for the wrong direction (tokens swapped).
+        bytes memory wrongTokens =
+            _rebateArgs(strategyHash, address(usdc), address(wbtc), 0.1e8, true, 50, 42, rebateSignerKey);
+        vm.prank(taker);
+        vm.expectRevert(VortexAquaPricing.VortexRebateMismatch.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, wrongTokens));
+
+        // Signed for somebody else: a different taker cannot ride the rebate.
+        address otherTaker = makeAddr("otherTaker");
+        wbtc.mint(otherTaker, 1e8);
+        vm.startPrank(otherTaker);
+        wbtc.approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        bytes memory forOriginalTaker =
+            _rebateArgs(strategyHash, address(wbtc), address(usdc), 0.1e8, true, 50, 43, rebateSignerKey);
+        vm.prank(otherTaker);
+        vm.expectRevert(VortexAquaPricing.VortexRebateMismatch.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, forOriginalTaker));
+    }
+
+    function test_oracleSpreadTooWideReverts() public {
+        (ISwapVM.Order memory order,) = _shipDefault();
+
+        // 2% spread against a 50 bps configured maximum.
+        oracle.setPrice(MID, 99_000e18, 101_000e18);
+
+        vm.prank(taker);
+        vm.expectPartialRevert(VortexAquaPricing.VortexOracleSpreadTooWide.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, ""));
+    }
+
+    function test_futureDatedOracleReverts() public {
+        (ISwapVM.Order memory order,) = _shipDefault();
+
+        // A feed stamped in the future would otherwise never look stale.
+        IVortexReferenceOracle.PriceData memory future = IVortexReferenceOracle.PriceData({
+            midPriceE18: MID,
+            bidPriceE18: BID,
+            askPriceE18: ASK,
+            updatedAt: uint40(block.timestamp + 365 days)
+        });
+        vm.mockCall(
+            address(oracle), abi.encodeWithSelector(IVortexReferenceOracle.latestPrice.selector), abi.encode(future)
+        );
+
+        vm.prank(taker);
+        vm.expectPartialRevert(VortexAquaPricing.VortexFutureOracleTimestamp.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, ""));
+    }
+
+    function test_invalidOraclePriceOrderingReverts() public {
+        (ISwapVM.Order memory order,) = _shipDefault();
+
+        // The mock enforces ordering on write, so forge the read directly.
+        IVortexReferenceOracle.PriceData memory broken = IVortexReferenceOracle.PriceData({
+            midPriceE18: MID,
+            bidPriceE18: MID + 1, // bid above mid
+            askPriceE18: ASK,
+            updatedAt: uint40(block.timestamp)
+        });
+        vm.mockCall(
+            address(oracle), abi.encodeWithSelector(IVortexReferenceOracle.latestPrice.selector), abi.encode(broken)
+        );
+
+        vm.prank(taker);
+        vm.expectPartialRevert(VortexAquaPricing.VortexInvalidOraclePrice.selector);
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, ""));
+    }
+
+    function test_zeroOutputReverts() public {
+        (ISwapVM.Order memory order,) = _shipDefault();
+
+        // 500 micro-USDC buys less than one satoshi; flooring gives 0 out.
+        vm.prank(taker);
+        vm.expectRevert(VortexAquaPricing.VortexZeroAmountOut.selector);
+        router.swap(order, address(usdc), address(wbtc), 500, _takerTraitsAndData(true, ""));
+    }
+
+    function test_extructionRejectsNonRouterCaller() public {
+        // Only the router may drive pricing — otherwise anyone could burn a
+        // taker's rebate nonces by replaying their authorization.
+        vm.expectRevert(
+            abi.encodeWithSelector(VortexAquaPricing.VortexUnauthorizedCaller.selector, address(this))
+        );
+        pricing.extruction(false, 0, _emptyQuery(), _emptyRegisters(), _configBlob(_defaultParams()), "");
+    }
+
+    function test_unsupportedTokenPairReverts() public {
+        VortexAquaOrderBuilder.VortexSwapStrategyParams memory params = _defaultParams();
+        (, bytes32 strategyHash) = _ship(params, 1e8, 100_000e6);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                VortexAquaPricing.VortexUnsupportedTokenPair.selector, address(weth), address(usdc)
+            )
+        );
+        pricing.preview(
+            _configBlob(params), maker, strategyHash, address(weth), address(usdc), true, 1e18, 1e8, 100_000e6, 0
+        );
+    }
+
+    function test_dockedStrategySwapReverts() public {
+        (ISwapVM.Order memory order, bytes32 strategyHash) = _shipDefault();
+
+        address[] memory tokens = new address[](2);
+        tokens[0] = address(wbtc);
+        tokens[1] = address(usdc);
+        vm.prank(maker);
+        aqua.dock(address(router), strategyHash, tokens);
+
+        vm.prank(taker);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAqua.SafeBalancesForTokenNotInActiveStrategy.selector,
+                maker,
+                address(router),
+                strategyHash,
+                address(wbtc)
+            )
+        );
+        router.swap(order, address(wbtc), address(usdc), 0.1e8, _takerTraitsAndData(true, ""));
+    }
+
+    function test_builderRejectsDeadConfigs() public {
+        VortexAquaOrderBuilder.VortexSwapStrategyParams memory params = _defaultParams();
+
+        params.quoteToken = params.baseToken;
+        vm.expectRevert(
+            abi.encodeWithSelector(VortexAquaOrderBuilder.VortexIdenticalTokens.selector, address(wbtc))
+        );
+        builder.buildOrder(params);
+
+        params = _defaultParams();
+        params.maxTradeBps = 0;
+        vm.expectRevert(abi.encodeWithSelector(VortexAquaOrderBuilder.VortexBpsOutOfRange.selector, 0, 1_000));
+        builder.buildOrder(params);
+
+        params = _defaultParams();
+        params.inventoryStrengthBps = 20_000;
+        vm.expectRevert(
+            abi.encodeWithSelector(VortexAquaOrderBuilder.VortexBpsOutOfRange.selector, 1_000, 20_000)
+        );
+        builder.buildOrder(params);
+
+        params = _defaultParams();
+        params.minCommercialFeeBps = 300; // above default and max
+        vm.expectRevert(abi.encodeWithSelector(VortexAquaOrderBuilder.VortexBadFeeBand.selector, 300, 20, 200));
+        builder.buildOrder(params);
+    }
+
+    function testFuzz_acceptedTradesRespectFeeFloorAndBounds(uint96 rawAmount, bool baseIn) public {
+        VortexAquaOrderBuilder.VortexSwapStrategyParams memory params = _defaultParams();
+        (, bytes32 strategyHash) = _ship(params, 1e8, 100_000e6);
+        bytes memory blob = _configBlob(params);
+
+        (address tokenIn, address tokenOut) =
+            baseIn ? (address(wbtc), address(usdc)) : (address(usdc), address(wbtc));
+        uint256 amount = bound(rawAmount, 1, baseIn ? 1e8 : 100_000e6);
+        (uint256 balanceIn, uint256 balanceOut) = baseIn ? (uint256(1e8), uint256(100_000e6)) : (100_000e6, 1e8);
+
+        try pricing.preview(
+            blob, maker, strategyHash, tokenIn, tokenOut, true, amount, balanceIn, balanceOut, 10_000
+        ) returns (VortexAquaPricing.FeeBreakdown memory bd) {
+            // Whatever the inputs, an ACCEPTED quote respects every floor.
+            assertGe(
+                bd.finalFeeBps,
+                params.minSafetyFeeBps + params.minCommercialFeeBps,
+                "safety floor is unreachable by any rebate"
+            );
+            assertGe(bd.commercialFeeBps, params.minCommercialFeeBps);
+            assertLe(bd.commercialFeeBps, params.maxCommercialFeeBps);
+            assertGt(bd.amountOut, 0);
+            assertLe(bd.amountOut, balanceOut);
+        } catch {
+            // Rejection is always an acceptable outcome; the invariants above
+            // only bind quotes the pool is willing to honour.
+        }
+    }
+
+    function _emptyQuery() internal view returns (SwapQuery memory) {
+        return SwapQuery({
+            orderHash: bytes32(0),
+            maker: maker,
+            taker: taker,
+            tokenIn: address(wbtc),
+            tokenOut: address(usdc),
+            isExactIn: true
+        });
+    }
+
+    function _emptyRegisters() internal pure returns (SwapRegisters memory) {
+        return SwapRegisters({ balanceIn: 1e8, balanceOut: 100_000e6, amountIn: 0.01e8, amountOut: 0, amountNetPulled: 0 });
     }
 
     function test_lensReportsPhantomLiquidity() public {
