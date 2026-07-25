@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import { Script } from "forge-std/Script.sol";
+import { VmSafe } from "forge-std/Vm.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { AquaSwapVMRouter } from "@1inch/swap-vm/src/routers/AquaSwapVMRouter.sol";
@@ -36,6 +37,12 @@ contract DeployLocal is Script {
         string memory contractsJson = vm.serializeAddress(contracts, "AquaSwapVMRouter", address(router));
         string memory json = vm.serializeString(root, "contracts", contractsJson);
 
-        vm.writeJson(json, string.concat("../../deployments/", vm.toString(block.chainid), ".json"));
+        // Only a real broadcast may rewrite the committed deployment file —
+        // dry runs and tests must not clobber it with unbroadcast addresses.
+        if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {
+            string memory fileName =
+                vm.envOr("DEPLOY_OUT", string.concat(vm.toString(block.chainid), ".json"));
+            vm.writeJson(json, string.concat("../../deployments/", fileName));
+        }
     }
 }
