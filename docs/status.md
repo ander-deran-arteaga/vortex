@@ -2,54 +2,55 @@
 
 ## Current gate
 
-Phases 0 and 1 have passed. Phase 2 (SwapVM best execution), Phase 3 (Uniswap
-comparison router), and Phase 4 (best-execution frontend, fixture-backed) are
-all open and progressing in parallel.
+Phases 0, 1, and 2 have passed. Phase 3 (Uniswap comparison router) has met
+its exit criteria pending one re-run; Phase 4 (best-execution frontend) is in
+review; Phase 5 (Vortex PermAMM) is now open.
 
-Verified at committed HEAD, in an isolated worktree: `forge build` clean,
-38 forge tests passing, shared 24, plus green web and api suites.
-
-**Open compliance issue:** three commits (`dd3b841`, `87d7b9f`, `d06ac17`)
-use `docs:`/`test:` prefixes, which the commit policy does not allow. The
-integration CI job fails until they are reworded. A `commit-msg` hook now
-blocks any further violations; install it in a fresh clone with
-`bash scripts/install-hooks.sh`.
+Verified green at `80f2873`: **388 tests** — contracts 61, shared 25, api 173
+(plus 1 opt-in fork test), web 129. Commit policy clean across 68 commits.
 
 ## Contracts
-- Current task: Phase 2 — Vortex Swap pricing, order builder, and strategy
-  lens are committed; inventory-aware fees and rebates landed
-- Last commit: work in flight on VortexAquaPricing and VortexAquaOrderBuilder
-- Tests: 38/38 forge green at committed HEAD (Vortex Swap suite 17,
-  AquaBaseline 11, VortexTokenMath 7, Phase0Deps 2, lens 1)
-- Blocker: none; a via_ir stack-too-deep exists in the uncommitted edit only
-- Interface changes: SwapVM v1.0.1 pinned 5-argument `quote`/`swap` with
-  explicit tokens; PoolManager pragma 0.8.26 forces a fork-sourced instance
-  in Phase 5
+- Current task: Phase 5 — Vortex PermAMM hook, liquidity manager, router,
+  quoter, signed fee authorization
+- Last commit: Phase 2 complete; ABIs exported under `deployments/abis/`
+- Tests: 61/61 forge green, including a 33-test Vortex Swap suite that maps
+  one-to-one onto the §18.1 risk list
+- Blocker: none
+- Interface changes: maker ship flow documented for the frontend — approvals
+  go to Aqua rather than the router, and strategies are immutable, so an edit
+  is dock-then-ship with a bumped salt
 
 ## Backend
-- Current task: Phase 3 — Uniswap client with rate limiting, live and fixture
-  Aqua quote sources, quote-session and evidence stores, route wiring
-- Last commit: d06ac17 (API-built swap executed on an Arbitrum One fork)
-- Tests: api suite green; the fork integration test is opt-in via
-  `VORTEX_INTEGRATION=1` and never runs in normal CI
-- Blocker: none; needs a seeded fork strategy hash from contracts for the
-  Aqua-wins demo path
-- Interface changes: venues ranked on net output; `expiresAt` epoch ms
+- Current task: Phase 3 close-out — repopulate quote provenance end to end and
+  introduce specific not-found codes
+- Last commit: exchange quote and Uniswap build routes live
+- Tests: 173 green plus an opt-in Arbitrum fork integration test
+- Blocker: none
+- Interface changes: every venue comparison now declares `source`
+  (`live` or `fixture`); quote sessions are single-use with a 45 s TTL
 
 ## Frontend
-- Current task: Phase 4 — maker, swap, and Grow interfaces against shared
-  schemas with clearly labeled fixture data
-- Last commit: 20ac56b (maker strategy and dashboard interfaces)
-- Tests: web suite green, typecheck clean, `next build` green across 7 pages
-- Blocker: none; flips to the live API when Phase 3 exits
-- Interface changes: none; consumes `@vortex/shared` read-only
+- Current task: Phase 4 — wire the simulated-data badge to the new per-venue
+  `source` field, then re-verify
+- Last commit: synthetic fixture identifiers
+- Tests: 129 green, typecheck clean, production build serves all 7 routes
+- Blocker: needs backend's specific not-found codes so a genuinely missing
+  resource is never mistaken for an unimplemented route
+- Interface changes: none
 
 ## Integration
-- Latest green commit: 261ab9d
-- Uniswap qualification evidence: API-built swap executed on an Arbitrum One
-  fork (chainId 42161, block 487597751) with request IDs and transaction hash
-  captured. The hash is fork-local and is labeled as such everywhere it
-  appears; it does not resolve on a public explorer.
-- Known failures: commit policy (three commits, above)
-- Next gate: Phase 2 exit, then Phase 3 exit with deterministic Aqua-wins and
-  Uniswap-wins cases
+- Latest green commit: 80f2873
+- Uniswap qualification evidence: an API-built swap executed against a pinned
+  Arbitrum One fork (chainId 42161, block 487597751), calldata broadcast
+  unmodified through Universal Router 2.0, with quote and swap request IDs and
+  the transaction hash stored and surfaced. Labeled as a fork everywhere; it
+  does not resolve on a public explorer.
+- Known failures: none
+- Next gate: Phase 3 formal pass, Phase 4 pass, then Phase 5 exit
+
+## Data honesty
+
+Every venue quote the UI renders carries its provenance. `source` is required
+by the shared schema with no default, so a simulated quote cannot inherit a
+"live" label, and the interface badges simulated data per venue rather than
+per response.
