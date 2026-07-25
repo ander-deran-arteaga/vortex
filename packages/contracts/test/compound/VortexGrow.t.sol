@@ -4,6 +4,8 @@ pragma solidity 0.8.30;
 import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
@@ -653,6 +655,207 @@ contract VortexGrowTest is Test {
         return abi.encode(auth, abi.encodePacked(r, s, v));
     }
 
+    /// @notice §18.1 "reentrancy fails". A malicious external venue calls back
+    ///         into `executeCompound` for the SAME maker+strategy while the
+    ///         first cycle is still mid-flight, between the Aqua pull and the
+    ///         push-back. That is the window where a second pull could drain
+    ///         the maker if nothing guarded it.
+    /// @dev The guard is Aqua's own `nonReentrantStrategy` transient lock from
+    ///      `AquaApp`, so the re-entrant call dies at `TransientLockLib.lock()`
+    ///      with `UnexpectedLock` before it can reach validation, the nonce, or
+    ///      a second `AQUA.pull`.
+    function test_reentrantExternalCallReverts() public {
+        ReentrantExternalRouter attacker = new ReentrantExternalRouter(compounder);
+        attacker.setRate(address(usdc), address(wbtc), _usdcToWbtcRate(95_000));
+        wbtc.mint(address(this), 1_000e8);
+        wbtc.transfer(address(attacker), 1_000e8);
+
+        (VortexCompounder.ExecuteParams memory params, bytes32 attackerStrategyHash) =
+            _buildParamsForTarget(address(attacker), 77);
+        // Re-enter with a DIFFERENT, individually-valid route (fresh nonce).
+        // Replaying the same route would be stopped by the nonce check, so the
+        // test would pass with no reentrancy guard at all — verified by
+        // mutation. A fresh nonce sails past that check, leaving the transient
+        // lock as the only thing standing between the attacker and a second
+        // AQUA.pull against the same maker.
+        VortexCompounder.ExecuteParams memory secondRoute =
+            _routeForShippedStrategy(params.strategy, attackerStrategyHash, address(attacker), 979);
+        attacker.setAttackCalldata(
+            abi.encodeCall(VortexCompounder.executeCompound, (secondRoute)), true
+        );
+
+        uint256 virtualBefore = _virtualAssetFor(attackerStrategyHash);
+        uint256 makerWalletBefore = wbtc.balanceOf(maker);
+
+        vm.prank(keeper);
+        (bool ok, bytes memory returndata) =
+            address(compounder).call(abi.encodeCall(VortexCompounder.executeCompound, (params)));
+
+        assertFalse(ok, "reentrant cycle must not succeed");
+        assertTrue(
+            _containsSelector(returndata, bytes4(keccak256("UnexpectedLock()"))),
+            "must fail on the reentrancy lock, not incidentally"
+        );
+
+        // And the maker is untouched: the outer cycle unwound with the pull.
+        assertEq(_virtualAssetFor(attackerStrategyHash), virtualBefore, "virtual balance untouched");
+        assertEq(wbtc.balanceOf(maker), makerWalletBefore, "maker wallet untouched");
+    }
+
+    /// @notice The same attack, but the attacker SWALLOWS the failed re-entry
+    ///         and lets the honest cycle finish.
+    /// @dev Proves the lock does not merely abort everything: a rejected
+    ///      re-entry leaves the legitimate compound correct, and the maker is
+    ///      credited for exactly ONE cycle rather than two.
+    function test_swallowedReentrancyLeavesOneCleanCycle() public {
+        ReentrantExternalRouter attacker = new ReentrantExternalRouter(compounder);
+        attacker.setRate(address(usdc), address(wbtc), _usdcToWbtcRate(95_000));
+        wbtc.mint(address(this), 1_000e8);
+        wbtc.transfer(address(attacker), 1_000e8);
+
+        (VortexCompounder.ExecuteParams memory params, bytes32 attackerStrategyHash) =
+            _buildParamsForTarget(address(attacker), 78);
+
+        // bubble = false: the attacker tries to re-enter, is rejected, and
+        // carries on as if nothing happened. Fresh nonce again, so the nonce
+        // check is not what does the rejecting.
+        VortexCompounder.ExecuteParams memory secondRoute =
+            _routeForShippedStrategy(params.strategy, attackerStrategyHash, address(attacker), 989);
+        attacker.setAttackCalldata(
+            abi.encodeCall(VortexCompounder.executeCompound, (secondRoute)), false
+        );
+
+        uint256 virtualBefore = _virtualAssetFor(attackerStrategyHash);
+
+        vm.prank(keeper);
+        compounder.executeCompound(params);
+
+        assertTrue(attacker.attackAttempted(), "the attacker really did try");
+        assertFalse(attacker.attackSucceeded(), "and it was rejected");
+        assertTrue(
+            _containsSelector(attacker.attackRevertData(), bytes4(keccak256("UnexpectedLock()"))),
+            "rejected by the reentrancy lock specifically, not by the nonce"
+        );
+
+        uint256 gained = _virtualAssetFor(attackerStrategyHash) - virtualBefore;
+        assertGt(gained, 0, "the honest cycle still compounded");
+        // One cycle's profit, not two: the rejected re-entry moved nothing.
+        assertLt(gained, uint256(PRINCIPAL) / 2, "no second cycle was credited");
+        assertEq(usdc.balanceOf(address(compounder)), 0, "no bridge dust");
+    }
+
+    /// @dev Ships a second strategy whose external venue is `target`, and
+    ///      builds a valid profitable route against it.
+    function _buildParamsForTarget(
+        address target,
+        uint64 routeNonce
+    )
+        internal
+        returns (VortexCompounder.ExecuteParams memory params, bytes32 shippedHash)
+    {
+        VortexGrowStrategy memory attackerStrategy = VortexGrowStrategy({
+            maker: maker,
+            asset: address(wbtc),
+            bridgeToken: address(usdc),
+            externalTarget: target,
+            routeSigner: routeSigner,
+            feeRecipient: feeRecipient,
+            maxAmountPerExecution: 2e8,
+            minProfitBps: 10,
+            performanceFeeBps: 2_000,
+            strategyDeadline: uint40(block.timestamp + 30 days),
+            salt: routeNonce
+        });
+        shippedHash = VortexCompoundRouteLib.strategyHash(attackerStrategy);
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(wbtc);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 5e8;
+        vm.prank(maker);
+        aqua.ship(address(compounder), abi.encode(attackerStrategy), tokens, amounts);
+
+        bytes memory permHookData = _permHookData(int256(uint256(BRIDGE_AMOUNT)));
+        bytes memory externalCalldata = abi.encodeCall(
+            MockExternalRouter.swap, (address(usdc), address(wbtc), BRIDGE_AMOUNT, address(compounder))
+        );
+
+        VortexCompoundRoute memory route = VortexCompoundRoute({
+            strategyHash: shippedHash,
+            opportunityId: keccak256(abi.encode("attack", routeNonce)),
+            direction: uint8(VortexGrowDirection.VORTEX_THEN_EXTERNAL),
+            principalAmount: PRINCIPAL,
+            bridgeAmount: BRIDGE_AMOUNT,
+            maxAssetSpent: 0.95e8,
+            minFinalAsset: 0,
+            externalTarget: target,
+            externalValue: 0,
+            externalCalldataHash: keccak256(externalCalldata),
+            permHookDataHash: keccak256(permHookData),
+            deadline: uint40(block.timestamp + 10 minutes),
+            nonce: routeNonce
+        });
+
+        params = VortexCompounder.ExecuteParams({
+            strategy: attackerStrategy,
+            route: route,
+            routeSignature: _signRoute(route),
+            permHookData: permHookData,
+            externalCalldata: externalCalldata,
+            poolKey: poolKey,
+            assetIsCurrency0: wbtcIsCurrency0
+        });
+    }
+
+    /// @dev A second, individually-valid route against a strategy that is
+    ///      already shipped — used to prove the reentrancy lock, not the nonce,
+    ///      is what stops a nested execution.
+    function _routeForShippedStrategy(
+        VortexGrowStrategy memory shippedStrategy,
+        bytes32 shippedHash,
+        address target,
+        uint64 routeNonce
+    )
+        internal
+        returns (VortexCompounder.ExecuteParams memory params)
+    {
+        bytes memory permHookData = _permHookData(int256(uint256(BRIDGE_AMOUNT)));
+        bytes memory externalCalldata = abi.encodeCall(
+            MockExternalRouter.swap, (address(usdc), address(wbtc), BRIDGE_AMOUNT, address(compounder))
+        );
+
+        VortexCompoundRoute memory route = VortexCompoundRoute({
+            strategyHash: shippedHash,
+            opportunityId: keccak256(abi.encode("attack-inner", routeNonce)),
+            direction: uint8(VortexGrowDirection.VORTEX_THEN_EXTERNAL),
+            principalAmount: PRINCIPAL,
+            bridgeAmount: BRIDGE_AMOUNT,
+            maxAssetSpent: 0.95e8,
+            minFinalAsset: 0,
+            externalTarget: target,
+            externalValue: 0,
+            externalCalldataHash: keccak256(externalCalldata),
+            permHookDataHash: keccak256(permHookData),
+            deadline: uint40(block.timestamp + 10 minutes),
+            nonce: routeNonce
+        });
+
+        params = VortexCompounder.ExecuteParams({
+            strategy: shippedStrategy,
+            route: route,
+            routeSignature: _signRoute(route),
+            permHookData: permHookData,
+            externalCalldata: externalCalldata,
+            poolKey: poolKey,
+            assetIsCurrency0: wbtcIsCurrency0
+        });
+    }
+
+    function _virtualAssetFor(bytes32 hash) internal view returns (uint256 balance) {
+        (uint248 raw,) = aqua.rawBalances(maker, address(compounder), hash, address(wbtc));
+        balance = raw;
+    }
+
     // ===== event helper =====
 
     /// @dev Executes and returns the accounting the contract itself emitted,
@@ -711,5 +914,55 @@ contract VortexGrowInvertedOrientationTest is VortexGrowTest {
             (address(wbtc) < address(usdc)) != naturalWbtcFirst,
             "orientation was not actually flipped"
         );
+    }
+}
+
+/// @notice An external venue that tries to re-enter the compounder mid-cycle.
+/// @dev Deliberately shaped like `MockExternalRouter` so the honest path still
+///      works — the attack is the extra callback, not a broken swap.
+contract ReentrantExternalRouter {
+    VortexCompounder public immutable COMPOUNDER;
+
+    mapping(address tokenIn => mapping(address tokenOut => uint256 rateE18)) public rateE18;
+
+    bytes public attackCalldata;
+    bytes public attackRevertData;
+    bool public bubbleRevert;
+    bool public attackAttempted;
+    bool public attackSucceeded;
+
+    constructor(VortexCompounder compounder) {
+        COMPOUNDER = compounder;
+    }
+
+    function setRate(address tokenIn, address tokenOut, uint256 newRateE18) external {
+        rateE18[tokenIn][tokenOut] = newRateE18;
+    }
+
+    /// @param bubble true → let the rejected re-entry abort the whole cycle;
+    ///               false → swallow it and let the honest cycle finish.
+    function setAttackCalldata(bytes memory data, bool bubble) external {
+        attackCalldata = data;
+        bubbleRevert = bubble;
+    }
+
+    function swap(address tokenIn, address tokenOut, uint256 amountIn, address recipient) external {
+        // Re-enter BEFORE settling, i.e. while the compounder is between its
+        // Aqua pull and its push-back.
+        if (attackCalldata.length > 0) {
+            attackAttempted = true;
+            (bool ok, bytes memory reason) = address(COMPOUNDER).call(attackCalldata);
+            attackSucceeded = ok;
+            attackRevertData = reason;
+            if (!ok && bubbleRevert) {
+                assembly ("memory-safe") {
+                    revert(add(reason, 0x20), mload(reason))
+                }
+            }
+        }
+
+        IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+        uint256 amountOut = (amountIn * rateE18[tokenIn][tokenOut]) / 1e18;
+        IERC20(tokenOut).transfer(recipient, amountOut);
     }
 }
