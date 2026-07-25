@@ -1,0 +1,42 @@
+name: typescript
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/typescript.yml"
+  pull_request:
+    paths:
+      - "apps/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "tsconfig.base.json"
+      - ".github/workflows/typescript.yml"
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm -r --filter '!@vortex/contracts' build
+
+      - name: Test
+        run: pnpm -r --filter '!@vortex/contracts' test

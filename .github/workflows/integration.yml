@@ -1,0 +1,39 @@
+name: integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  qualification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Commit policy
+        run: bash scripts/check-commit-policy.sh
+
+      - name: Forbidden naming
+        run: |
+          if grep -RniE "aquaguard|premamm|prepamm" . \
+            --exclude-dir=.git \
+            --exclude-dir=node_modules \
+            --exclude-dir=out \
+            --exclude-dir=cache \
+            --exclude-dir=.next \
+            --exclude-dir=dist; then
+            echo "forbidden project names found"
+            exit 1
+          fi
+          echo "naming: OK"
+
+      - name: API key hygiene
+        run: |
+          if grep -Rn "NEXT_PUBLIC_UNISWAP" apps packages 2>/dev/null | grep -v node_modules; then
+            echo "Uniswap API key must never reach the frontend"
+            exit 1
+          fi
+          echo "api-key hygiene: OK"
