@@ -16,8 +16,10 @@ export function registerConfigRoutes(
     })),
     contracts: ctx.deployment.contracts as ConfigResponse["contracts"],
     features: {
-      // Grow execution stays off until Phase 6 opens the compound route.
-      growEnabled: false,
+      // True only when a compounder, both signers and the PermAMM leg are
+      // actually deployed — the same condition the Grow endpoints require, so
+      // the flag can never advertise a capability that would 503.
+      growEnabled: ctx.grow !== null,
       // MASTER Addendum 4 §3: DEMO_MODE gates the labeling of simulated
       // venues. While the Aqua leg is served by the deterministic fixture,
       // some of the quoted data IS simulated, so the flag is forced on — the

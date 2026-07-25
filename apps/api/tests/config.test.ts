@@ -47,7 +47,9 @@ describe(`GET ${API_ROUTES.config}`, () => {
     expect(bySymbol.get("USDC")?.decimals).toBe(6);
 
     expect(body.contracts).toEqual(deploymentContracts(42161));
+    // No Grow deployment on 42161, so the capability is honestly off.
     expect(body.features.growEnabled).toBe(false);
+    expect(built.ctx.grow).toBeNull();
   });
 
   it("passes DEMO_MODE through untouched once the venue is live", async () => {
