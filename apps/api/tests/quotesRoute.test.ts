@@ -510,3 +510,175 @@ describe("venue viability and error hygiene", () => {
     expect(res.body).not.toContain("secret detail");
   });
 });
+
+/**
+ * MASTER Addendum 9 standing rule: anything whose behaviour depends on address
+ * sort order, chain id, or block time must be tested in BOTH branches.
+ *
+ * The token direction is this backend's instance of that rule. Every other
+ * test here quotes WBTC -> USDC, so the output token is always 6 decimals and
+ * `gasFeeQuote` is always denominated in USDC. Reversed, the output token has
+ * 8 decimals and the live API returns a gas figure of ~5 satoshis — small
+ * enough that a rounding slip is a fifth of the whole number.
+ *
+ * Live-probed reference (2026-07-25): 640 USDC in -> 995477 sats out,
+ * minimum 992490, gasUseEstimate 100676, gasFeeQuote 5.
+ */
+describe("both token directions", () => {
+  const AMOUNT_USDC_IN = "640000000"; // 640 USDC, 6 decimals
+  const UNI_WBTC_OUT = "995477"; // satoshis, 8 decimals
+  const UNI_WBTC_MIN = "992490";
+
+  function reverseUniswapClient(): UniswapApiClient {
+    const quote = {
+      chainId: 42161,
+      swapper: TAKER,
+      tradeType: "EXACT_INPUT",
+      route: [],
+      input: { amount: AMOUNT_USDC_IN, token: USDC, maximumAmount: AMOUNT_USDC_IN },
+      output: {
+        amount: UNI_WBTC_OUT,
+        token: WBTC,
+        recipient: TAKER,
+        minimumAmount: UNI_WBTC_MIN,
+      },
+      slippage: 0.3,
+      priceImpact: 0.02,
+      gasFee: "2117203956000",
+      gasFeeUSD: "0.0037639702186518247",
+      gasFeeQuote: "5", // satoshis — the whole gas cost in the output token
+      gasUseEstimate: "100676",
+      routeString: "[V3] USDC -> WBTC",
+      blockNumber: "487600000",
+      quoteId: "q-rev",
+      maxFeePerGas: "21040000",
+      maxPriorityFeePerGas: "0",
+      txFailureReasons: [],
+    };
+    return stubUniswapClient({
+      getClassicQuote: async () => ({
+        requestId: "req-uniswap-reverse",
+        routing: "CLASSIC",
+        quote: quote as never,
+        rawQuote: quote,
+        permitData: null,
+        permitTransaction: null,
+        approvalRequired: true,
+      }),
+    });
+  }
+
+  const reverseServer = (midE18: bigint, fixture: Record<string, unknown>) =>
+    buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          midPriceE18: midE18,
+          ...fixture,
+        }),
+        uniswapClient: reverseUniswapClient(),
+        executions: createExecutionStore({
+          dir: "/evidence",
+          fs: memoryFs(),
+          now: () => 1_753_000_000_000,
+        }),
+      },
+    );
+
+  const reverseQuote = (server: BuiltServer) =>
+    server.app.inject({
+      method: "POST",
+      url: API_ROUTES.exchangeQuote,
+      payload: {
+        chainId: 42161,
+        strategyHash: STRATEGY,
+        tokenIn: USDC,
+        tokenOut: WBTC,
+        amountIn: AMOUNT_USDC_IN,
+        taker: TAKER,
+        slippageBps: 30,
+      },
+    });
+
+  it("quotes USDC -> WBTC with 8-decimal output, not 6", async () => {
+    // A 6-decimal assumption on the output would be off by 100x.
+    built = reverseServer(64_000n * 10n ** 18n, AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await reverseQuote(built)).json());
+
+    // 640 USDC at a 64_000 mid is 0.01 WBTC = 1_000_000 sats, less 8 bps.
+    expect(body.comparison.aqua!.amountOut).toBe("999200");
+    expect(BigInt(body.comparison.uniswap!.amountOut)).toBe(BigInt(UNI_WBTC_OUT));
+  });
+
+  it("selects AQUA in reverse when the maker prices better", async () => {
+    built = reverseServer(64_000n * 10n ** 18n, AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await reverseQuote(built)).json());
+
+    expect(body.selectedVenue).toBe("AQUA");
+    expect(BigInt(body.comparison.aqua!.netAmountOut)).toBeGreaterThan(
+      BigInt(body.comparison.uniswap!.netAmountOut),
+    );
+  });
+
+  it("selects UNISWAP in reverse when the maker is stressed", async () => {
+    built = reverseServer(66_000n * 10n ** 18n, AQUA_UNCOMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await reverseQuote(built)).json());
+
+    expect(body.selectedVenue).toBe("UNISWAP");
+    expect(BigInt(body.comparison.uniswap!.netAmountOut)).toBeGreaterThan(
+      BigInt(body.comparison.aqua!.netAmountOut),
+    );
+  });
+
+  it("charges gas in satoshis, rounded up, when the output token is WBTC", async () => {
+    built = reverseServer(64_000n * 10n ** 18n, AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await reverseQuote(built)).json());
+
+    // Uniswap: min 992490 - 5 sats of gas.
+    expect(BigInt(body.comparison.uniswap!.netAmountOut)).toBe(
+      BigInt(UNI_WBTC_MIN) - 5n,
+    );
+    // Aqua: ceil(260_000 * 5 / 100_676) = ceil(12.91…) = 13 sats. Flooring
+    // would understate it, and at this scale that is 8% of the charge.
+    const aquaMin = BigInt(body.comparison.aqua!.minimumAmountOut);
+    expect(BigInt(body.comparison.aqua!.netAmountOut)).toBe(aquaMin - 13n);
+  });
+
+  it("keeps slippage protection oriented correctly in reverse", async () => {
+    built = reverseServer(64_000n * 10n ** 18n, AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await reverseQuote(built)).json());
+
+    for (const venue of [body.comparison.aqua!, body.comparison.uniswap!]) {
+      expect(BigInt(venue.minimumAmountOut)).toBeLessThanOrEqual(
+        BigInt(venue.amountOut),
+      );
+      expect(BigInt(venue.netAmountOut)).toBeLessThanOrEqual(
+        BigInt(venue.minimumAmountOut),
+      );
+    }
+  });
+
+  it("rejects a pair the maker does not support, in either direction", async () => {
+    const WETH = "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1";
+    built = reverseServer(64_000n * 10n ** 18n, AQUA_COMPETITIVE_FIXTURE);
+
+    const res = await built.app.inject({
+      method: "POST",
+      url: API_ROUTES.exchangeQuote,
+      payload: {
+        chainId: 42161,
+        strategyHash: STRATEGY,
+        tokenIn: WETH,
+        tokenOut: WBTC,
+        amountIn: AMOUNT_USDC_IN,
+        taker: TAKER,
+        slippageBps: 30,
+      },
+    });
+
+    // Aqua cannot price it; Uniswap still can, so the trade still routes.
+    const body = zExchangeQuoteResponse.parse(res.json());
+    expect(body.selectedVenue).toBe("UNISWAP");
+  });
+});
