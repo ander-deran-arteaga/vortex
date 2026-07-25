@@ -54,7 +54,14 @@ export function buildServer(
     }
     return reply.status(status).send({
       error: {
-        code: typeof e.code === "string" ? e.code : "INTERNAL_ERROR",
+        // Internal codes are as revealing as internal messages, so both are
+        // suppressed above 500 — the log keeps the detail.
+        code:
+          status >= 500
+            ? "INTERNAL_ERROR"
+            : typeof e.code === "string"
+              ? e.code
+              : "INTERNAL_ERROR",
         message:
           status >= 500
             ? "internal error"

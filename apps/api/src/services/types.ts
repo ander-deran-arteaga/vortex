@@ -40,6 +40,11 @@ export interface UniswapQuote extends VenueQuote {
   approvalRequired: boolean;
   gasFeeUSD: string | null;
   priceImpact: number | null;
+  /**
+   * Non-empty means Uniswap's own auto-simulation of this route failed, so the
+   * quote must not be routed to however good its numbers look.
+   */
+  txFailureReasons: string[];
 }
 
 export interface QuoteRequestParams {

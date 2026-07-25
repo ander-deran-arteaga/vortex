@@ -77,6 +77,7 @@ async function loadUniswapQuote(
       approvalRequired: quote.approvalRequired,
       gasFeeUSD: quote.quote.gasFeeUSD ?? null,
       priceImpact: quote.quote.priceImpact ?? null,
+      txFailureReasons: quote.quote.txFailureReasons ?? [],
     } satisfies UniswapQuote;
   });
 }
@@ -132,12 +133,21 @@ export async function quoteExchange(
   // A quote that exists but cannot settle is not a venue. Routing to one would
   // strand the taker just as surely as routing to a venue that never quoted.
   const aquaViable = Boolean(aquaQuote?.executable);
-  const uniswapViable = uniswapQuote !== null;
+  // A quote Uniswap simulated as failing is not a venue either: routing to it
+  // hands the taker a transaction that reverts and costs them the gas.
+  const uniswapViable =
+    uniswapQuote !== null && uniswapQuote.txFailureReasons.length === 0;
 
   if (!aquaViable && !uniswapViable) {
+    const reasons = [
+      aquaQuote?.reason ? `Aqua unavailable (${aquaQuote.reason})` : null,
+      uniswapQuote && uniswapQuote.txFailureReasons.length > 0
+        ? `Uniswap simulation failed (${uniswapQuote.txFailureReasons.join(", ")})`
+        : null,
+    ].filter(Boolean);
     throw new NoVenueAvailableError(
-      aquaQuote?.reason
-        ? `the Uniswap API returned no quote and the Aqua strategy is unavailable (${aquaQuote.reason})`
+      reasons.length > 0
+        ? reasons.join("; ")
         : "neither the Aqua strategy nor the Uniswap API returned a quote",
     );
   }

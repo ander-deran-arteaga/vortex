@@ -429,3 +429,76 @@ describe("quote session lifecycle", () => {
     expect(zApiError.parse(res.json()).error.code).toBe("QUOTE_SESSION_EXPIRED");
   });
 });
+
+describe("venue viability and error hygiene", () => {
+  const failingSimulation = () =>
+    stubUniswapClient({
+      getClassicQuote: async () => {
+        const q = uniswapQuoteResponse({
+          txFailureReasons: ["SIMULATION_ERROR"],
+        });
+        return {
+          requestId: q.requestId,
+          routing: q.routing,
+          quote: q.quote as never,
+          rawQuote: q.quote,
+          permitData: null,
+          permitTransaction: null,
+          approvalRequired: true,
+        };
+      },
+    });
+
+  it("refuses to route to a Uniswap quote its own simulation failed", async () => {
+    // Aqua cannot settle either, so the only 'available' venue is the broken
+    // one. Routing there would hand the taker a reverting transaction.
+    built = serverWith({ forcedReason: "VortexStaleOracle" }, failingSimulation());
+    const res = await postQuote(built);
+
+    expect(res.statusCode).toBe(503);
+    const body = zApiError.parse(res.json());
+    expect(body.error.code).toBe("NO_VENUE_AVAILABLE");
+    expect(body.error.message).toContain("SIMULATION_ERROR");
+  });
+
+  it("prefers an executable Aqua quote over a failing Uniswap simulation", async () => {
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE, failingSimulation());
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    expect(body.selectedVenue).toBe("AQUA");
+  });
+
+  it("refuses to build a Uniswap swap for a session where Aqua won", async () => {
+    // Uniswap quoted fine here, so `uniswap` is stored on the session; only
+    // selectedVenue distinguishes it.
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE);
+    const quote = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    expect(quote.selectedVenue).toBe("AQUA");
+
+    const res = await built.app.inject({
+      method: "POST",
+      url: API_ROUTES.transactionsUniswap,
+      payload: { quoteSessionId: quote.quoteSessionId },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(zApiError.parse(res.json()).error.code).toBe("NOT_A_UNISWAP_SESSION");
+  });
+
+  it("suppresses internal error codes as well as messages on 5xx", async () => {
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE);
+    built.app.get("/boom", () => {
+      const err = new Error("secret detail") as Error & { code: string };
+      err.code = "ENOENT_SECRET_PATH";
+      throw err;
+    });
+
+    const res = await built.app.inject({ method: "GET", url: "/boom" });
+
+    expect(res.statusCode).toBe(500);
+    const body = zApiError.parse(res.json());
+    expect(body.error.code).toBe("INTERNAL_ERROR");
+    expect(res.body).not.toContain("ENOENT_SECRET_PATH");
+    expect(res.body).not.toContain("secret detail");
+  });
+});

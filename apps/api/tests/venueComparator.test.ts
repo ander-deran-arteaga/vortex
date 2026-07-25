@@ -31,6 +31,7 @@ const AQUA_GAS_DERIVED = 9_693n;
 const STRATEGY_HASH = `0x${"11".repeat(32)}` as Hex;
 
 const uniQuote = (overrides: Partial<UniswapQuote> = {}): UniswapQuote => ({
+  txFailureReasons: [],
   amountIn: AMOUNT_IN,
   amountOut: UNI_OUT,
   minimumAmountOut: UNI_MIN,

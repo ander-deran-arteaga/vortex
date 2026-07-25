@@ -78,6 +78,7 @@ const uniswapQuote = (): UniswapQuote => ({
   approvalRequired: false,
   gasFeeUSD: "0.00375",
   priceImpact: 0.05,
+  txFailureReasons: [],
 });
 
 const exchangePayload = (): ExchangeSessionPayload => ({

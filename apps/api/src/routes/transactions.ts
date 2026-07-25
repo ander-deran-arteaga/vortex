@@ -42,8 +42,11 @@ export function registerTransactionRoutes(
       });
     }
 
-    const { uniswap, request } = result.session.payload;
-    if (!uniswap) {
+    const { uniswap, request, selectedVenue } = result.session.payload;
+    // Both quotes are stored on every session, so presence alone does not mean
+    // Uniswap won. Without this the taker could execute the venue the
+    // comparator rejected and it would still be logged as best execution.
+    if (selectedVenue !== "UNISWAP" || !uniswap) {
       return reply.status(409).send({
         error: {
           code: "NOT_A_UNISWAP_SESSION",
