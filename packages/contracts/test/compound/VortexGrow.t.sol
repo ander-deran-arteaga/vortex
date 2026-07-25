@@ -856,6 +856,94 @@ contract VortexGrowTest is Test {
         balance = raw;
     }
 
+    /// @notice A maker who DOCKS their strategy mid-cycle — after the
+    ///         compounder has already pulled their capital — must not be able
+    ///         to strand it. Aqua refuses `push` to a non-active strategy, so
+    ///         the push-back fails and the whole cycle reverts atomically,
+    ///         returning the principal.
+    /// @dev docs/security.md asserted this was covered at Phase 6. It was not.
+    ///      Writing the claim down before the test existed is the same defect
+    ///      class this suite keeps catching, so here is the test.
+    ///      The maker must be a CONTRACT: Aqua scopes balances by `msg.sender`,
+    ///      so only the shipping address can dock its own strategy, and only a
+    ///      contract can do that from inside the cycle.
+    function test_makerDockingMidCycleCannotStrandCapital() public {
+        DockingMakerVenue dockingMaker = new DockingMakerVenue(aqua, address(wbtc), address(usdc));
+        wbtc.mint(address(dockingMaker), 10e8);
+        dockingMaker.approveAqua();
+        dockingMaker.setRate(_usdcToWbtcRate(95_000));
+
+        VortexGrowStrategy memory dockStrategy = VortexGrowStrategy({
+            maker: address(dockingMaker),
+            asset: address(wbtc),
+            bridgeToken: address(usdc),
+            externalTarget: address(dockingMaker),
+            routeSigner: routeSigner,
+            feeRecipient: feeRecipient,
+            maxAmountPerExecution: 2e8,
+            minProfitBps: 10,
+            performanceFeeBps: 2_000,
+            strategyDeadline: uint40(block.timestamp + 30 days),
+            salt: 555
+        });
+        bytes32 dockHash = VortexCompoundRouteLib.strategyHash(dockStrategy);
+        dockingMaker.shipTo(address(compounder), abi.encode(dockStrategy), 5e8, dockHash);
+
+        bytes memory permHookData = _permHookData(int256(uint256(BRIDGE_AMOUNT)));
+        bytes memory externalCalldata = abi.encodeCall(
+            MockExternalRouter.swap, (address(usdc), address(wbtc), BRIDGE_AMOUNT, address(compounder))
+        );
+        VortexCompoundRoute memory route = VortexCompoundRoute({
+            strategyHash: dockHash,
+            opportunityId: keccak256("dock-attack"),
+            direction: uint8(VortexGrowDirection.VORTEX_THEN_EXTERNAL),
+            principalAmount: PRINCIPAL,
+            bridgeAmount: BRIDGE_AMOUNT,
+            maxAssetSpent: 0.95e8,
+            minFinalAsset: 0,
+            externalTarget: address(dockingMaker),
+            externalValue: 0,
+            externalCalldataHash: keccak256(externalCalldata),
+            permHookDataHash: keccak256(permHookData),
+            deadline: uint40(block.timestamp + 10 minutes),
+            nonce: 555
+        });
+        VortexCompounder.ExecuteParams memory params = VortexCompounder.ExecuteParams({
+            strategy: dockStrategy,
+            route: route,
+            routeSignature: _signRoute(route),
+            permHookData: permHookData,
+            externalCalldata: externalCalldata,
+            poolKey: poolKey,
+            assetIsCurrency0: wbtcIsCurrency0
+        });
+
+        // Sanity: without the dock, this exact cycle succeeds. Otherwise the
+        // test below could pass for an unrelated reason.
+        uint256 snapshot = vm.snapshotState();
+        vm.prank(keeper);
+        compounder.executeCompound(params);
+        vm.revertToState(snapshot);
+
+        // Now the maker docks from inside the external leg, mid-cycle.
+        dockingMaker.setShouldDock(address(compounder), dockHash, true);
+
+        uint256 makerWalletBefore = wbtc.balanceOf(address(dockingMaker));
+
+        vm.prank(keeper);
+        (bool ok, bytes memory returndata) =
+            address(compounder).call(abi.encodeCall(VortexCompounder.executeCompound, (params)));
+
+        assertFalse(ok, "a mid-cycle dock must not let the cycle complete");
+        assertTrue(
+            _containsSelector(returndata, IAqua.PushToNonActiveStrategyPrevented.selector),
+            "must fail on Aqua refusing the push-back"
+        );
+        // The pull is undone with everything else — capital is not stranded.
+        assertEq(wbtc.balanceOf(address(dockingMaker)), makerWalletBefore, "principal returned");
+        assertEq(wbtc.balanceOf(address(compounder)), 0, "nothing stranded in the app");
+    }
+
     // ===== event helper =====
 
     /// @dev Executes and returns the accounting the contract itself emitted,
@@ -964,5 +1052,60 @@ contract ReentrantExternalRouter {
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
         uint256 amountOut = (amountIn * rateE18[tokenIn][tokenOut]) / 1e18;
         IERC20(tokenOut).transfer(recipient, amountOut);
+    }
+}
+
+/// @notice A maker that is also the external venue, so it can dock its own
+///         Aqua strategy from inside the compound cycle.
+/// @dev Aqua scopes balances by `msg.sender`, so only the shipping address may
+///      dock — which is why this has to be a contract rather than a pranked EOA.
+contract DockingMakerVenue {
+    Aqua public immutable AQUA;
+    address public immutable WBTC;
+    address public immutable USDC;
+
+    uint256 public rate;
+    bool public shouldDock;
+    address public app;
+    bytes32 public strategyHash;
+
+    constructor(Aqua aqua, address wbtc, address usdc) {
+        AQUA = aqua;
+        WBTC = wbtc;
+        USDC = usdc;
+    }
+
+    function approveAqua() external {
+        IERC20(WBTC).approve(address(AQUA), type(uint256).max);
+        IERC20(USDC).approve(address(AQUA), type(uint256).max);
+    }
+
+    function setRate(uint256 newRate) external {
+        rate = newRate;
+    }
+
+    function setShouldDock(address app_, bytes32 hash_, bool value) external {
+        app = app_;
+        strategyHash = hash_;
+        shouldDock = value;
+    }
+
+    function shipTo(address app_, bytes memory strategy, uint256 amount, bytes32 expected) external {
+        address[] memory tokens = new address[](1);
+        tokens[0] = WBTC;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = amount;
+        bytes32 shipped = AQUA.ship(app_, strategy, tokens, amounts);
+        require(shipped == expected, "ship hash mismatch");
+    }
+
+    function swap(address tokenIn, address tokenOut, uint256 amountIn, address recipient) external {
+        if (shouldDock) {
+            address[] memory tokens = new address[](1);
+            tokens[0] = WBTC;
+            AQUA.dock(app, strategyHash, tokens);
+        }
+        IERC20(tokenIn).transferFrom(msg.sender, address(this), amountIn);
+        IERC20(tokenOut).transfer(recipient, (amountIn * rate) / 1e18);
     }
 }
