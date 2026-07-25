@@ -6,7 +6,8 @@ import {
   ApiRequestError,
   ApiUnavailableError,
 } from "@/lib/api/errors";
-import { fetchConfig } from "@/lib/api/endpoints";
+import { fetchConfig, fetchStrategyHealth } from "@/lib/api/endpoints";
+import { FIXTURE_STRATEGY_HASH } from "@/lib/api/fixtures";
 
 const schema = z.object({ ok: z.boolean() });
 
@@ -129,6 +130,20 @@ describe("fixture fallback honesty invariant", () => {
     const result = await fetchConfig();
     expect(result.source).toBe("live");
     expect(result.data.chainId).toBe(42161);
+  });
+
+  it("only fabricates strategy health for a known demo strategy", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("Not Found", { status: 404 })));
+
+    // The demo strategy may fall back — it is what the UI links to.
+    const known = await fetchStrategyHealth(FIXTURE_STRATEGY_HASH);
+    expect(known.source).toBe("fixture");
+
+    // An arbitrary hash must NOT render as a healthy maker holding inventory.
+    const unknown = `0x${"ab".repeat(32)}`;
+    await expect(fetchStrategyHealth(unknown)).rejects.toBeInstanceOf(
+      ApiUnavailableError,
+    );
   });
 
   it("RETHROWS a real API failure instead of masking it as fixture data", async () => {

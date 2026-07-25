@@ -1,24 +1,44 @@
 import type { DataSource } from "@/lib/api/source";
 
 /**
- * Renders the provenance of the numbers next to it. Master ruling
- * (Addendum 4): fixture values presented as live data are a blocked
- * implementation, so every panel showing `Sourced<T>` data renders this.
+ * Two different questions, two different badges.
+ *
+ * `variant="data"` (default) labels the numbers beside it — this is the one
+ * that satisfies §21, and it must sit in the same panel as the values it
+ * describes. Provenance is per-venue: a single quote response routinely
+ * carries a fixture Aqua leg next to a live Uniswap leg, so one badge for the
+ * whole response would necessarily mislabel one of them.
+ *
+ * `variant="response"` labels how the response itself arrived (the live API,
+ * or the fixture fallback when the API is unreachable). It is context, never a
+ * substitute for per-venue labeling.
  */
 export function SourceBadge({
   source,
+  variant = "data",
   className = "",
 }: {
   source: DataSource;
+  variant?: "data" | "response";
   className?: string;
 }) {
-  if (source === "live") {
+  const live = source === "live";
+  const label =
+    variant === "response"
+      ? live
+        ? "Live API response"
+        : "Fixture fallback response"
+      : live
+        ? "Live data"
+        : "Fixture data";
+
+  if (live) {
     return (
       <span
         className={`inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-400 ${className}`}
       >
         <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-        Live data
+        {label}
       </span>
     );
   }
@@ -26,10 +46,14 @@ export function SourceBadge({
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 ${className}`}
-      title="The backend comparison router is not connected yet — these values come from deterministic fixtures, not from Aqua or the Uniswap API."
+      title={
+        variant === "response"
+          ? "The Vortex API was unreachable, so this whole response came from deterministic fixtures."
+          : "Simulated — these values come from deterministic fixtures, not from a real Aqua or Uniswap quote."
+      }
     >
       <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-      Fixture data
+      {label}
     </span>
   );
 }

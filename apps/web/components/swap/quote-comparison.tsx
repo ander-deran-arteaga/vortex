@@ -1,4 +1,9 @@
-import type { AquaComparison, ExchangeQuoteResponse, UniswapComparison } from "@vortex/shared";
+import type {
+  AquaComparison,
+  ExchangeQuoteResponse,
+  QuoteSource,
+  UniswapComparison,
+} from "@vortex/shared";
 import { USDC } from "@vortex/shared";
 import { SourceBadge } from "@/components/source-badge";
 import type { DataSource } from "@/lib/api/source";
@@ -22,11 +27,13 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
 }
 
 function VenueCard({
-  title, subtitle, selected, children,
+  title, subtitle, selected, source, children,
 }: {
   title: string;
   subtitle: string;
   selected: boolean;
+  /** This venue's own provenance — the two legs of one response can differ. */
+  source: QuoteSource;
   children: React.ReactNode;
 }) {
   return (
@@ -43,11 +50,14 @@ function VenueCard({
           <h3 className="text-sm font-medium text-zinc-100">{title}</h3>
           <p className="text-xs text-zinc-500">{subtitle}</p>
         </div>
-        {selected ? (
-          <span className="rounded-full border border-teal-500/40 bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-400">
-            Selected
-          </span>
-        ) : null}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {selected ? (
+            <span className="rounded-full border border-teal-500/40 bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-400">
+              Selected
+            </span>
+          ) : null}
+          <SourceBadge source={source} />
+        </div>
       </header>
       <dl className="divide-y divide-zinc-800/70">{children}</dl>
     </section>
@@ -154,7 +164,7 @@ export function QuoteComparison({
               {expired ? "Quote expired" : `Quote expires in ${secondsRemaining}s`}
             </span>
           )}
-          <SourceBadge source={source} />
+          <SourceBadge source={source} variant="response" />
         </div>
       </div>
 
@@ -176,6 +186,7 @@ export function QuoteComparison({
             title="Aqua · SwapVM"
             subtitle="Maker inventory"
             selected={selection.winner === "AQUA"}
+            source={quote.comparison.aqua.source}
           >
             <AquaRows aqua={quote.comparison.aqua} />
           </VenueCard>
@@ -187,6 +198,7 @@ export function QuoteComparison({
             title="Uniswap API"
             subtitle="External liquidity"
             selected={selection.winner === "UNISWAP"}
+            source={quote.comparison.uniswap.source}
           >
             <UniswapRows uniswap={quote.comparison.uniswap} />
           </VenueCard>

@@ -22,6 +22,8 @@ import { z } from "zod";
 import { apiRequest } from "./client";
 import { ApiUnavailableError } from "./errors";
 import {
+  FIXTURE_GROW_STRATEGY_HASH,
+  FIXTURE_STRATEGY_HASH,
   buildConfigFixture,
   buildExchangeQuoteFixture,
   buildExecutionsFixture,
@@ -120,13 +122,30 @@ export async function prepareGrowRoute(
   );
 }
 
+/**
+ * Fixture health is scoped to the two known demo strategies. Answering for an
+ * arbitrary hash would render a strategy nobody ever shipped as a healthy
+ * maker holding real inventory — the same back-door the API closed by scoping
+ * its own fixture to one demo hash. An unknown hash gets the real failure.
+ */
+const FIXTURE_STRATEGY_HASHES = new Set<string>([
+  FIXTURE_STRATEGY_HASH.toLowerCase(),
+  FIXTURE_GROW_STRATEGY_HASH.toLowerCase(),
+]);
+
 export async function fetchStrategyHealth(
   strategyHash: string,
   options: { covered?: boolean } = {},
 ): Promise<Sourced<StrategyHealth>> {
-  return withFixtureFallback(
-    () => apiRequest(API_ROUTES.strategy(strategyHash), { schema: zStrategyHealth }),
-    () => buildStrategyHealthFixture(strategyHash, options),
+  const request = () =>
+    apiRequest(API_ROUTES.strategy(strategyHash), { schema: zStrategyHealth });
+
+  if (!FIXTURE_STRATEGY_HASHES.has(strategyHash.toLowerCase())) {
+    return live(await request());
+  }
+
+  return withFixtureFallback(request, () =>
+    buildStrategyHealthFixture(strategyHash, options),
   );
 }
 

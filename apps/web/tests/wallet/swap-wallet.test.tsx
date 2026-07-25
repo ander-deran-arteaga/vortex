@@ -58,10 +58,11 @@ describe("swap page wallet handling", () => {
     await user.click(screen.getByRole("button", { name: /get best execution/i }));
 
     await waitFor(() => {
-      expect(screen.getByText("Fixture data")).toBeInTheDocument();
+      expect(screen.getAllByText("Fixture data").length).toBeGreaterThan(0);
     });
-    expect(screen.getAllByText(/fixture/i).length).toBeGreaterThan(0);
+    // Both venue legs are fixture-backed here, so nothing may claim live data.
     expect(screen.queryByText("Live data")).toBeNull();
+    expect(screen.getByText("Fixture fallback response")).toBeInTheDocument();
   });
 
   it("prompts to switch when the wallet is on an unsupported chain", async () => {

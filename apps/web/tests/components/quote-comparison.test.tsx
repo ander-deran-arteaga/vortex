@@ -110,28 +110,79 @@ describe("quote comparison", () => {
   });
 });
 
-describe("provenance labeling", () => {
-  it("labels fixture-backed numbers as fixture data", () => {
+describe("per-venue provenance labeling", () => {
+  it("badges each venue with its own source", () => {
     render(
-      <QuoteComparison
-        quote={quoteFor("AQUA")}
-        source="fixture"
-        secondsRemaining={30}
-      />,
+      <QuoteComparison quote={quoteFor("AQUA")} source="fixture" secondsRemaining={30} />,
     );
-    expect(screen.getByText("Fixture data")).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Aqua · SwapVM")).getByText("Fixture data"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Uniswap API")).getByText("Fixture data"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Live data")).toBeNull();
   });
 
-  it("labels live numbers as live and never claims fixture", () => {
-    render(
-      <QuoteComparison
-        quote={quoteFor("AQUA")}
-        source="live"
-        secondsRemaining={30}
-      />,
+  it("renders TWO DIFFERENT badges for a mixed-provenance response", () => {
+    // A fixture Aqua leg beside a live Uniswap leg is the normal case while
+    // Phase 3 lands. A single response-level badge would necessarily mislabel
+    // one of them — the §21 violation this test exists to prevent.
+    const quote = quoteFor("AQUA");
+    const mixed = {
+      ...quote,
+      comparison: {
+        aqua: quote.comparison.aqua === null ? null : { ...quote.comparison.aqua, source: "fixture" as const },
+        uniswap:
+          quote.comparison.uniswap === null
+            ? null
+            : { ...quote.comparison.uniswap, source: "live" as const },
+      },
+    };
+
+    render(<QuoteComparison quote={mixed} source="live" secondsRemaining={30} />);
+
+    const aquaCard = screen.getByLabelText("Aqua · SwapVM");
+    const uniswapCard = screen.getByLabelText("Uniswap API");
+
+    expect(within(aquaCard).getByText("Fixture data")).toBeInTheDocument();
+    expect(within(aquaCard).queryByText("Live data")).toBeNull();
+
+    expect(within(uniswapCard).getByText("Live data")).toBeInTheDocument();
+    expect(within(uniswapCard).queryByText("Fixture data")).toBeNull();
+  });
+
+  it("never brands a live venue as fixture when the response fell back", () => {
+    const quote = quoteFor("AQUA");
+    const mixed = {
+      ...quote,
+      comparison: {
+        aqua: quote.comparison.aqua === null ? null : { ...quote.comparison.aqua, source: "live" as const },
+        uniswap:
+          quote.comparison.uniswap === null
+            ? null
+            : { ...quote.comparison.uniswap, source: "fixture" as const },
+      },
+    };
+    render(<QuoteComparison quote={mixed} source="fixture" secondsRemaining={30} />);
+
+    expect(
+      within(screen.getByLabelText("Aqua · SwapVM")).getByText("Live data"),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByLabelText("Uniswap API")).getByText("Fixture data"),
+    ).toBeInTheDocument();
+  });
+
+  it("labels the response transport separately from the venue data", () => {
+    const { rerender } = render(
+      <QuoteComparison quote={quoteFor("AQUA")} source="fixture" secondsRemaining={30} />,
     );
-    expect(screen.getByText("Live data")).toBeInTheDocument();
-    expect(screen.queryByText("Fixture data")).toBeNull();
+    expect(screen.getByText("Fixture fallback response")).toBeInTheDocument();
+
+    rerender(
+      <QuoteComparison quote={quoteFor("AQUA")} source="live" secondsRemaining={30} />,
+    );
+    expect(screen.getByText("Live API response")).toBeInTheDocument();
   });
 });
