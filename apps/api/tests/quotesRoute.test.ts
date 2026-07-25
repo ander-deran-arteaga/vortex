@@ -183,6 +183,15 @@ describe(`POST ${API_ROUTES.exchangeQuote}`, () => {
     );
   });
 
+  it("labels the Aqua leg as fixture data so the UI cannot present it as live (§21)", async () => {
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    expect(body.comparison.aqua!.source).toBe("fixture");
+    // Uniswap quotes only ever come from the authenticated live API.
+    expect(body.comparison.uniswap!.source).toBe("live");
+  });
+
   it("selects UNISWAP when the maker is stressed and prices badly", async () => {
     built = serverWith(AQUA_UNCOMPETITIVE_FIXTURE);
     const res = await postQuote(built);
