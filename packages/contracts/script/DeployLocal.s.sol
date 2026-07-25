@@ -7,6 +7,8 @@ import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { AquaSwapVMRouter } from "@1inch/swap-vm/src/routers/AquaSwapVMRouter.sol";
 
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
+import { MockUSDC } from "../src/mocks/MockUSDC.sol";
+import { MockWBTC } from "../src/mocks/MockWBTC.sol";
 
 /// @notice Deterministic local deployment: official Aqua + official
 ///         AquaSwapVMRouter + WBTC/USDC/WETH mocks. Writes addresses to
@@ -16,8 +18,8 @@ contract DeployLocal is Script {
         vm.startBroadcast();
 
         Aqua aqua = new Aqua();
-        MockERC20 wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
-        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockWBTC wbtc = new MockWBTC();
+        MockUSDC usdc = new MockUSDC();
         MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
         AquaSwapVMRouter router =
             new AquaSwapVMRouter(address(aqua), address(weth), msg.sender, "AquaSwapVMRouter", "1.0.1");

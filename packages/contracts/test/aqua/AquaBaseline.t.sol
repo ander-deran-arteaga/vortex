@@ -7,14 +7,15 @@ import { stdError } from "forge-std/StdError.sol";
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
-import { MockERC20 } from "../../src/mocks/MockERC20.sol";
+import { MockUSDC } from "../../src/mocks/MockUSDC.sol";
+import { MockWBTC } from "../../src/mocks/MockWBTC.sol";
 
 /// @notice Phase 1 exit gate: a real ERC-20 changes owner through the official
 ///         Aqua contract, and virtual balances track every move exactly.
 contract AquaBaselineTest is Test {
     Aqua internal aqua;
-    MockERC20 internal wbtc;
-    MockERC20 internal usdc;
+    MockWBTC internal wbtc;
+    MockUSDC internal usdc;
 
     address internal maker = makeAddr("maker");
     address internal app = makeAddr("app");
@@ -28,8 +29,8 @@ contract AquaBaselineTest is Test {
 
     function setUp() public {
         aqua = new Aqua();
-        wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
-        usdc = new MockERC20("USD Coin", "USDC", 6);
+        wbtc = new MockWBTC();
+        usdc = new MockUSDC();
 
         wbtc.mint(maker, 10e8);
         usdc.mint(maker, 1_000_000e6);

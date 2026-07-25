@@ -8,6 +8,8 @@ import { AquaSwapVMRouter } from "@1inch/swap-vm/src/routers/AquaSwapVMRouter.so
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
+import { MockUSDC } from "../src/mocks/MockUSDC.sol";
+import { MockWBTC } from "../src/mocks/MockWBTC.sol";
 
 /// @notice Phase 0 exit gate: every pinned dependency resolves, compiles, and deploys.
 contract Phase0DepsTest is Test {
@@ -15,8 +17,8 @@ contract Phase0DepsTest is Test {
         Aqua aqua = new Aqua();
         assertGt(address(aqua).code.length, 0);
 
-        MockERC20 wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
-        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
+        MockWBTC wbtc = new MockWBTC();
+        MockUSDC usdc = new MockUSDC();
         MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
         assertEq(wbtc.decimals(), 8);
         assertEq(usdc.decimals(), 6);
@@ -36,7 +38,7 @@ contract Phase0DepsTest is Test {
 
     function test_aquaVirtualBalanceBookkeeping() public {
         Aqua aqua = new Aqua();
-        MockERC20 wbtc = new MockERC20("Wrapped BTC", "WBTC", 8);
+        MockWBTC wbtc = new MockWBTC();
 
         address app = makeAddr("app");
         address[] memory tokens = new address[](1);
