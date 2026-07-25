@@ -67,7 +67,8 @@ export function MakerClient() {
     expiry: "86400",
   });
 
-  const approval = useApproval();
+  const swapApproval = useApproval();
+  const growApproval = useApproval();
   const [approvalNote, setApprovalNote] = useState<string | null>(null);
 
   const setSwapField = (key: keyof typeof swapForm) => (value: string) =>
@@ -96,7 +97,9 @@ export function MakerClient() {
     { key: "growExpiry", label: "Strategy expiry", kind: "duration", value: growForm.expiry, onChange: setGrowField("expiry") },
   ];
 
-  const approvalStatus = (): StrategyStep["status"] => {
+  const approvalStatus = (
+    approval: ReturnType<typeof useApproval>,
+  ): StrategyStep["status"] => {
     if (approval.error) return "error";
     if (approval.receipt.isSuccess) return "done";
     if (approval.isPending || approval.receipt.isLoading) return "active";
@@ -104,7 +107,7 @@ export function MakerClient() {
   };
 
   const swapSteps: StrategyStep[] = [
-    { label: "Approve WBTC", status: approvalStatus() },
+    { label: "Approve WBTC", status: approvalStatus(swapApproval) },
     { label: "Approve USDC", status: "pending" },
     { label: "Build strategy", status: "blocked", note: SHIP_BLOCKED_NOTE },
     { label: "Ship strategy", status: "blocked", note: SHIP_BLOCKED_NOTE },
@@ -113,13 +116,18 @@ export function MakerClient() {
   ];
 
   const growSteps: StrategyStep[] = [
-    { label: "Approve WBTC", status: approvalStatus() },
+    { label: "Approve WBTC", status: approvalStatus(growApproval) },
     { label: "Ship strategy", status: "blocked", note: SHIP_BLOCKED_NOTE },
     { label: "Strategy hash", status: "pending" },
     { label: "Balances", status: "pending" },
   ];
 
-  const handleApprove = async (tokenAddress: string, rawAmount: string, decimals: number) => {
+  const handleApprove = async (
+    approval: ReturnType<typeof useApproval>,
+    tokenAddress: string,
+    rawAmount: string,
+    decimals: number,
+  ) => {
     setApprovalNote(null);
     const token = asEvmAddress(tokenAddress);
     // Aqua's address comes from deployments once the contracts land; until then
@@ -187,11 +195,20 @@ export function MakerClient() {
         </p>
       )}
 
-      {approval.error ? (
-        <p role="alert" className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-          {approval.error.message}
+      {[
+        { form: "Vortex Swap", error: swapApproval.error },
+        { form: "Vortex Grow", error: growApproval.error },
+      ].flatMap(({ form, error }) =>
+        error ? [{ form, message: error.message }] : [],
+      ).map((failure) => (
+        <p
+          key={failure.form}
+          role="alert"
+          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300"
+        >
+          {failure.form} approval failed: {failure.message}
         </p>
-      ) : null}
+      ))}
 
       <div className="grid gap-6 lg:grid-cols-2">
         <StrategyForm
@@ -199,10 +216,12 @@ export function MakerClient() {
           description="A two-token market-making position quoted through SwapVM. Pricing leans against inventory: trades that recentre the book get a better price, trades that worsen it pay more."
           fields={swapFields}
           steps={swapSteps}
-          onSubmit={() => void handleApprove(WBTC.address, swapForm.wbtc, WBTC.decimals)}
-          disabled={walletBlocked || approval.isPending}
-          busy={approval.isPending}
-          submitLabel={approval.isPending ? "Approving…" : "Approve WBTC"}
+          onSubmit={() =>
+            void handleApprove(swapApproval, WBTC.address, swapForm.wbtc, WBTC.decimals)
+          }
+          disabled={walletBlocked || swapApproval.isPending}
+          busy={swapApproval.isPending}
+          submitLabel={swapApproval.isPending ? "Approving…" : "Approve WBTC"}
         />
 
         <StrategyForm
@@ -211,11 +230,16 @@ export function MakerClient() {
           fields={growFields}
           steps={growSteps}
           onSubmit={() =>
-            void handleApprove(WBTC.address, growForm.maxPerExecution, WBTC.decimals)
+            void handleApprove(
+              growApproval,
+              WBTC.address,
+              growForm.maxPerExecution,
+              WBTC.decimals,
+            )
           }
-          disabled={walletBlocked || approval.isPending}
-          busy={approval.isPending}
-          submitLabel={approval.isPending ? "Approving…" : "Approve WBTC"}
+          disabled={walletBlocked || growApproval.isPending}
+          busy={growApproval.isPending}
+          submitLabel={growApproval.isPending ? "Approving…" : "Approve WBTC"}
         />
       </div>
 

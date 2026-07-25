@@ -119,6 +119,14 @@ export function StrategyForm({
                   autoComplete="off"
                   value={field.value}
                   onChange={(event) => field.onChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    // Submitting this form sends an onchain approval. A stray
+                    // Enter in any of ten fields must not open a wallet
+                    // signature prompt — require an explicit click.
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                    }
+                  }}
                   aria-invalid={error !== null}
                   aria-describedby={error === null ? undefined : `${inputId}-error`}
                   className="w-full bg-transparent font-mono text-sm tabular-nums text-zinc-100 outline-none placeholder:text-zinc-700"
