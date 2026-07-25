@@ -52,6 +52,9 @@ contract VortexAquaOrderBuilder {
     error VortexFeeCeilingTooHigh(uint256 worstCaseFeeBps);
     error VortexZeroAddress();
     error VortexExpiredStrategyDeadline(uint40 strategyDeadline);
+    error VortexIdenticalTokens(address token);
+    error VortexUnsupportedDecimals(address token, uint8 decimals);
+    error VortexBpsOutOfRange(uint16 maxTradeBps, uint16 inventoryStrengthBps);
 
     constructor(VortexAquaPricing pricing) {
         PRICING = pricing;
@@ -65,26 +68,7 @@ contract VortexAquaOrderBuilder {
         view
         returns (ISwapVM.Order memory order, bytes32 strategyHash)
     {
-        _validate(params);
-
-        VortexSwapConfig memory cfg = VortexSwapConfig({
-            baseToken: params.baseToken,
-            quoteToken: params.quoteToken,
-            referenceOracle: params.referenceOracle,
-            rebateSigner: params.rebateSigner,
-            baseDecimals: IERC20Metadata(params.baseToken).decimals(),
-            quoteDecimals: IERC20Metadata(params.quoteToken).decimals(),
-            minSafetyFeeBps: params.minSafetyFeeBps,
-            defaultCommercialFeeBps: params.defaultCommercialFeeBps,
-            minCommercialFeeBps: params.minCommercialFeeBps,
-            maxCommercialFeeBps: params.maxCommercialFeeBps,
-            inventoryStrengthBps: params.inventoryStrengthBps,
-            maxTradeBps: params.maxTradeBps,
-            minBaseWeightBps: params.minBaseWeightBps,
-            maxBaseWeightBps: params.maxBaseWeightBps,
-            maxOracleSpreadBps: params.maxOracleSpreadBps,
-            maxOracleAge: params.maxOracleAge
-        });
+        VortexSwapConfig memory cfg = _validatedConfig(params);
 
         order = MakerTraitsLib.build(
             MakerTraitsLib.Args({
@@ -137,6 +121,34 @@ contract VortexAquaOrderBuilder {
         );
     }
 
+    /// @dev Validates params and packs them into the immutable config. Kept in
+    ///      its own frame so `buildOrder`'s stack stays within via-IR limits.
+    function _validatedConfig(VortexSwapStrategyParams calldata params)
+        internal
+        view
+        returns (VortexSwapConfig memory cfg)
+    {
+        _validate(params);
+        // Field-by-field rather than a struct literal: a 16-field literal
+        // holds every value live at once and blows the via-IR stack limit.
+        cfg.baseToken = params.baseToken;
+        cfg.quoteToken = params.quoteToken;
+        cfg.referenceOracle = params.referenceOracle;
+        cfg.rebateSigner = params.rebateSigner;
+        cfg.baseDecimals = IERC20Metadata(params.baseToken).decimals();
+        cfg.quoteDecimals = IERC20Metadata(params.quoteToken).decimals();
+        cfg.minSafetyFeeBps = params.minSafetyFeeBps;
+        cfg.defaultCommercialFeeBps = params.defaultCommercialFeeBps;
+        cfg.minCommercialFeeBps = params.minCommercialFeeBps;
+        cfg.maxCommercialFeeBps = params.maxCommercialFeeBps;
+        cfg.inventoryStrengthBps = params.inventoryStrengthBps;
+        cfg.maxTradeBps = params.maxTradeBps;
+        cfg.minBaseWeightBps = params.minBaseWeightBps;
+        cfg.maxBaseWeightBps = params.maxBaseWeightBps;
+        cfg.maxOracleSpreadBps = params.maxOracleSpreadBps;
+        cfg.maxOracleAge = params.maxOracleAge;
+    }
+
     function _validate(VortexSwapStrategyParams calldata params) internal view {
         require(
             params.maker != address(0) && params.baseToken != address(0) && params.quoteToken != address(0)
@@ -155,5 +167,18 @@ contract VortexAquaOrderBuilder {
         uint256 worstCaseFee = uint256(params.minSafetyFeeBps) + params.maxCommercialFeeBps;
         require(worstCaseFee < 10_000, VortexFeeCeilingTooHigh(worstCaseFee));
         require(params.strategyDeadline > block.timestamp, VortexExpiredStrategyDeadline(params.strategyDeadline));
+
+        // Shipped strategies are immutable, so a config that can never price a
+        // trade would strand the maker in a dock-and-reship cycle. Reject the
+        // dead configurations here, where it is still free to fix them.
+        require(params.baseToken != params.quoteToken, VortexIdenticalTokens(params.baseToken));
+        uint8 baseDecimals = IERC20Metadata(params.baseToken).decimals();
+        uint8 quoteDecimals = IERC20Metadata(params.quoteToken).decimals();
+        require(baseDecimals <= 18, VortexUnsupportedDecimals(params.baseToken, baseDecimals));
+        require(quoteDecimals <= 18, VortexUnsupportedDecimals(params.quoteToken, quoteDecimals));
+        require(
+            params.maxTradeBps > 0 && params.maxTradeBps <= 10_000 && params.inventoryStrengthBps <= 10_000,
+            VortexBpsOutOfRange(params.maxTradeBps, params.inventoryStrengthBps)
+        );
     }
 }

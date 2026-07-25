@@ -150,6 +150,7 @@ contract VortexAquaPricing is EIP712 {
     error VortexUnauthorizedCaller(address caller);
     error VortexUnsupportedTokenPair(address tokenIn, address tokenOut);
     error VortexStaleOracle(uint40 updatedAt, uint32 maxOracleAge);
+    error VortexFutureOracleTimestamp(uint40 updatedAt);
     error VortexInvalidOraclePrice(uint256 bidE18, uint256 midE18, uint256 askE18);
     error VortexOracleSpreadTooWide(uint256 spreadBps, uint16 maxOracleSpreadBps);
     error VortexMaxTradeExceeded(uint256 tradeFractionBps, uint16 maxTradeBps);
@@ -419,6 +420,9 @@ contract VortexAquaPricing is EIP712 {
         returns (IVortexReferenceOracle.PriceData memory price)
     {
         price = IVortexReferenceOracle(cfg.referenceOracle).latestPrice();
+        // A future-dated feed would otherwise pass the staleness gate forever,
+        // defeating maxOracleAge — the one knob bounding trust in the oracle.
+        require(uint256(price.updatedAt) <= block.timestamp, VortexFutureOracleTimestamp(price.updatedAt));
         require(
             block.timestamp <= uint256(price.updatedAt) + cfg.maxOracleAge,
             VortexStaleOracle(price.updatedAt, cfg.maxOracleAge)
