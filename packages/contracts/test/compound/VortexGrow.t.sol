@@ -79,8 +79,7 @@ contract VortexGrowTest is Test {
 
         aqua = new Aqua();
         poolManager = IPoolManager(deployCode("PoolManager.sol:PoolManager", abi.encode(address(this))));
-        wbtc = new MockWBTC();
-        usdc = new MockUSDC();
+        _deployTokens();
         wbtcIsCurrency0 = address(wbtc) < address(usdc);
 
         oracle = new MockReferenceOracle(address(this));
@@ -137,6 +136,14 @@ contract VortexGrowTest is Test {
         bytes32 shipped = aqua.ship(address(compounder), abi.encode(strategy), tokens, amounts);
         vm.stopPrank();
         assertEq(shipped, strategyHash, "aqua hashes the strategy the same way we do");
+    }
+
+    /// @dev Overridden by the inverted-orientation suite. v4 sorts currencies
+    ///      by address, so which token is currency0 is a deployment accident —
+    ///      MASTER's standing rule (Addendum 9) requires both branches.
+    function _deployTokens() internal virtual {
+        wbtc = new MockWBTC();
+        usdc = new MockUSDC();
     }
 
     // ===== harness =====
@@ -670,5 +677,39 @@ contract VortexGrowTest is Test {
             }
         }
         revert("VortexGrowExecuted not emitted");
+    }
+}
+
+/// @notice Re-runs the entire Grow suite with the token ordering FLIPPED.
+/// @dev MASTER Addendum 9 standing rule: anything whose behaviour depends on
+///      address sort order must be tested in both branches. The Phase 5 hook
+///      bug (oracle never inverted when the base asset sorted as currency1)
+///      was exactly this class, and Grow drives the same pool through the same
+///      hook — so the compounder inherits the hazard and must inherit the
+///      guard.
+contract VortexGrowInvertedOrientationTest is VortexGrowTest {
+    function _deployTokens() internal override {
+        address lowSlot = address(uint160(0x2222 << 100));
+        address highSlot = address(uint160(0x8888 << 100));
+
+        MockWBTC naturalWbtc = new MockWBTC();
+        MockUSDC naturalUsdc = new MockUSDC();
+        bool naturalWbtcFirst = address(naturalWbtc) < address(naturalUsdc);
+
+        (address wbtcSlot, address usdcSlot) =
+            naturalWbtcFirst ? (highSlot, lowSlot) : (lowSlot, highSlot);
+
+        deployCodeTo("MockWBTC.sol:MockWBTC", "", wbtcSlot);
+        deployCodeTo("MockUSDC.sol:MockUSDC", "", usdcSlot);
+
+        wbtc = MockWBTC(wbtcSlot);
+        usdc = MockUSDC(usdcSlot);
+
+        // Without this the inverted suite could silently degrade into a
+        // duplicate of the normal one and look like free coverage.
+        require(
+            (address(wbtc) < address(usdc)) != naturalWbtcFirst,
+            "orientation was not actually flipped"
+        );
     }
 }
