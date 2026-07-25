@@ -31,6 +31,13 @@ const zEnv = z.object({
 export type Env = z.output<typeof zEnv>;
 export type EnvOverrides = Partial<Record<keyof z.input<typeof zEnv>, string>>;
 
-export function loadEnv(overrides: EnvOverrides = {}): Env {
-  return zEnv.parse({ ...process.env, ...overrides });
+/**
+ * `source` is injectable so tests can parse from a controlled object instead
+ * of the ambient shell/CI environment.
+ */
+export function loadEnv(
+  overrides: EnvOverrides = {},
+  source: NodeJS.ProcessEnv = process.env,
+): Env {
+  return zEnv.parse({ ...source, ...overrides });
 }

@@ -2,12 +2,17 @@ import { readFileSync } from "node:fs";
 
 import type { DeploymentFile } from "@vortex/shared";
 
+const DEFAULT_DEPLOYMENTS_DIR = new URL(
+  "../../../../deployments/",
+  import.meta.url,
+);
+
 /** Reads deployments/<chainId>.json from the repo root (blockend-published). */
-export function loadDeployment(chainId: number): DeploymentFile {
-  const url = new URL(
-    `../../../../deployments/${chainId}.json`,
-    import.meta.url,
-  );
+export function loadDeployment(
+  chainId: number,
+  deploymentsDir: URL = DEFAULT_DEPLOYMENTS_DIR,
+): DeploymentFile {
+  const url = new URL(`${chainId}.json`, deploymentsDir);
   const parsed = JSON.parse(readFileSync(url, "utf8")) as DeploymentFile;
   if (parsed.chainId !== chainId) {
     throw new Error(

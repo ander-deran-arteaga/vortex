@@ -10,9 +10,13 @@ afterEach(async () => {
   built = undefined;
 });
 
+// envSource: {} keeps every test hermetic against the shell/CI environment.
+const hermetic = (overrides: Parameters<typeof buildServer>[0]) =>
+  buildServer(overrides, { envSource: {} });
+
 describe(`GET ${API_ROUTES.health}`, () => {
   it("reports liveness with the configured chain id", async () => {
-    built = buildServer({ CHAIN_ID: "42161" });
+    built = hermetic({ CHAIN_ID: "42161" });
     const res = await built.app.inject({ method: "GET", url: API_ROUTES.health });
 
     expect(res.statusCode).toBe(200);
@@ -23,7 +27,7 @@ describe(`GET ${API_ROUTES.health}`, () => {
   });
 
   it("honors CHAIN_ID overrides for the local fork", async () => {
-    built = buildServer({ CHAIN_ID: "31337" });
+    built = hermetic({ CHAIN_ID: "31337" });
     const res = await built.app.inject({ method: "GET", url: API_ROUTES.health });
 
     expect(res.statusCode).toBe(200);
@@ -31,6 +35,6 @@ describe(`GET ${API_ROUTES.health}`, () => {
   });
 
   it("rejects unsupported chains at boot", () => {
-    expect(() => buildServer({ CHAIN_ID: "1" })).toThrow();
+    expect(() => hermetic({ CHAIN_ID: "1" })).toThrow(/CHAIN_ID/);
   });
 });

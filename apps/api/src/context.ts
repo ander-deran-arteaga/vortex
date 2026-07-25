@@ -9,8 +9,11 @@ export interface AppContext {
   startedAt: number;
 }
 
-export function buildContext(overrides: EnvOverrides = {}): AppContext {
-  const env = loadEnv(overrides);
+export function buildContext(
+  overrides: EnvOverrides = {},
+  envSource?: NodeJS.ProcessEnv,
+): AppContext {
+  const env = loadEnv(overrides, envSource);
   return {
     env,
     deployment: loadDeployment(env.CHAIN_ID),

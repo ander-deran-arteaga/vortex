@@ -2,10 +2,10 @@ import { pathToFileURL } from "node:url";
 
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
-import { ZodError } from "zod";
 
 import { buildContext, type AppContext } from "./context";
 import type { EnvOverrides } from "./config/env";
+import { RequestValidationError } from "./lib/errors";
 import { registerConfigRoutes } from "./routes/config";
 import { registerHealthRoutes } from "./routes/health";
 
@@ -16,20 +16,20 @@ export interface BuiltServer {
 
 export function buildServer(
   overrides: EnvOverrides = {},
-  opts: { logger?: boolean } = {},
+  opts: { logger?: boolean; envSource?: NodeJS.ProcessEnv } = {},
 ): BuiltServer {
-  const ctx = buildContext(overrides);
+  const ctx = buildContext(overrides, opts.envSource);
   const app = Fastify({ logger: opts.logger ?? false });
 
   app.register(cors, { origin: true });
 
-  app.setErrorHandler((err: unknown, _req, reply) => {
-    if (err instanceof ZodError) {
+  app.setErrorHandler((err: unknown, req, reply) => {
+    if (err instanceof RequestValidationError) {
       return reply.status(400).send({
         error: {
           code: "VALIDATION_ERROR",
           message: "invalid request",
-          details: err.flatten(),
+          details: err.zodError.flatten(),
         },
       });
     }
@@ -38,6 +38,9 @@ export function buildServer(
       typeof e.statusCode === "number" && e.statusCode >= 400
         ? e.statusCode
         : 500;
+    if (status >= 500) {
+      req.log.error({ err }, "request failed");
+    }
     return reply.status(status).send({
       error: {
         code: typeof e.code === "string" ? e.code : "INTERNAL_ERROR",
