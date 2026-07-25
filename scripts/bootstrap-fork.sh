@@ -52,6 +52,20 @@ else
   SEED_OUT="31337.demo.json"
 fi
 
+# Refuse to start if something is already on the port. The chain-id probe below
+# cannot catch this case: another anvil on 31337 answers identically to ours, so
+# a squatted port would sail through and we would redeploy on top of a chain the
+# demo is already using — new addresses, stale committed artifacts, live session
+# broken. Fail before spawning anything.
+if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
+  echo "refusing to start: something is already listening on port $PORT." >&2
+  echo "  If that is the demo chain, it is already up — skip the bootstrap." >&2
+  echo "  To run a second chain alongside it: ANVIL_PORT=<other> $0" >&2
+  echo "  Owner of the port (do not pkill by name):" >&2
+  ss -ltnp "sport = :$PORT" 2>/dev/null | tail -n +2 >&2
+  exit 1
+fi
+
 anvil "${ANVIL_ARGS[@]}" &
 ANVIL_PID=$!
 trap 'kill "$ANVIL_PID" 2>/dev/null || true' EXIT INT TERM

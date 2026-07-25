@@ -20,6 +20,12 @@ RPC=http://127.0.0.1:8545
 bash scripts/bootstrap-fork.sh
 ```
 
+**If the demo chain is already running on 8545, skip this step** — the script
+refuses to start rather than redeploying on top of a live chain, and prints the
+PID holding the port. Re-bootstrapping would mint new addresses and strand the
+committed artifacts, the running API and any open session. Use
+`ANVIL_PORT=<other>` if you genuinely want a second chain alongside it.
+
 Deploys, in a fixed order that the committed addresses depend on: official Aqua
 + AquaSwapVMRouter + tokens + oracle + the Vortex Swap stack; the seeded Vortex
 Swap strategy; a real Uniswap v4 PoolManager with the Vortex PermAMM hook at a
@@ -93,6 +99,12 @@ scenario cannot silently take the pool down with it.
 ```bash
 forge script script/QuoteDemo.s.sol --rpc-url $RPC        # what the maker quotes right now
 ```
+
+**Check this before demoing.** The scenario in section 3 is persistent chain
+state, so a chain left in `UNISWAP_WINS` will make the maker look uncompetitive
+in the headline best-execution scene. The competitive baseline quotes about
+**99,580 USDC/WBTC**; roughly **96,700** means the de-tuned scenario is still
+applied. Reset with `SCENARIO=AQUA_WINS` before the run.
 
 ## Known limitation: coverage is per strategy, not per maker
 
