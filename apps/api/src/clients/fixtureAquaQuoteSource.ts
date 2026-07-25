@@ -52,6 +52,9 @@ export interface FixtureAquaConfig {
   quoteInventory: bigint;
 }
 
+/** The single strategy the deterministic demo ships with. */
+export const DEMO_STRATEGY_HASH: Hex = `0x${"ab".repeat(32)}`;
+
 export const DEFAULT_FIXTURE_AQUA_CONFIG: FixtureAquaConfig = {
   midPriceE18: 65_000n * PRICE_SCALE,
   safetyFeeBps: 5,
@@ -66,7 +69,10 @@ export const DEFAULT_FIXTURE_AQUA_CONFIG: FixtureAquaConfig = {
   quoteToken: { address: USDC.address, decimals: USDC.decimals },
   gasUnits: AQUA_SWAP_GAS_UNITS,
   maker: "0x2222222222222222222222222222222222222222",
-  knownStrategyHash: null,
+  // Answering for every hash would render a strategy nobody shipped as
+  // healthy data — the §21 failure mode arriving through the back door. The
+  // fixture knows exactly one demo strategy; everything else is not found.
+  knownStrategyHash: DEMO_STRATEGY_HASH,
   baseInventory: 100_000_000n, // 1 WBTC
   quoteInventory: 65_000_000_000n, // 65_000 USDC
 };

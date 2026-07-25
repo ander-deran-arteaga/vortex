@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AQUA_COMPETITIVE_FIXTURE,
   createFixtureAquaQuoteSource,
+  DEMO_STRATEGY_HASH,
 } from "../src/clients/fixtureAquaQuoteSource";
 import { buildServer, type BuiltServer } from "../src/server";
 
@@ -163,5 +164,31 @@ describe("Vortex Swap works with no PermAMM deployed", () => {
     });
 
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("default fixture configuration", () => {
+  it("knows only the demo strategy, so unshipped hashes are not invented", async () => {
+    // Regression guard: a fixture that answers for every hash would render a
+    // strategy nobody shipped as healthy data (§21).
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      { envSource: {}, uniswapClient: null },
+    );
+
+    const known = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${DEMO_STRATEGY_HASH}`,
+    });
+    const unknown = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${UNKNOWN}`,
+    });
+
+    expect(known.statusCode).toBe(200);
+    expect(unknown.statusCode).toBe(404);
+    expect(zApiError.parse(unknown.json()).error.code).toBe(
+      "STRATEGY_NOT_FOUND",
+    );
   });
 });
