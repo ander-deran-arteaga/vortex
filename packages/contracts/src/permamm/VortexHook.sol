@@ -36,6 +36,7 @@ contract VortexHook is IHooks, EIP712 {
 
     uint256 private constant PIPS = 1_000_000;
     uint256 private constant BPS_DENOMINATOR = 10_000;
+    uint256 private constant Q96 = 1 << 96;
 
     IPoolManager public immutable POOL_MANAGER;
     IVortexReferenceOracle public immutable ORACLE;
@@ -403,11 +404,15 @@ contract VortexHook is IHooks, EIP712 {
         require(deviationBps <= MAX_POOL_DEVIATION_BPS, VortexPoolDeviationTooLarge(deviationBps));
     }
 
-    /// @dev price = (sqrtPriceX96 / 2^96)^2, scaled to 1e18. Split into two
-    ///      mulDiv-safe halves to avoid overflowing on realistic prices.
+    /// @dev price = (sqrtPriceX96 / 2^96)^2, scaled to 1e18.
+    /// @dev `Math.mulDiv` carries a 512-bit intermediate, which matters: a
+    ///      plain `p * p` overflows uint256 well below v4's MAX_SQRT_PRICE
+    ///      (~1.46e48 squares to ~2.1e96), so the naive version reverts on
+    ///      high-priced pools instead of measuring their deviation.
     function _sqrtPriceToPriceE18(uint160 sqrtPriceX96) private pure returns (uint256) {
         uint256 p = uint256(sqrtPriceX96);
-        return (p * p) >> 192 == 0 ? (p * p * 1e18) >> 192 : ((p * p) >> 192) * 1e18;
+        uint256 priceX96 = Math.mulDiv(p, p, Q96);
+        return Math.mulDiv(priceX96, 1e18, Q96);
     }
 
     /// @dev The oracle quotes QUOTE per BASE (USDC per WBTC) at 1e18. The pool

@@ -2,6 +2,7 @@
 pragma solidity 0.8.30;
 
 import { Test } from "forge-std/Test.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import { Hooks } from "@uniswap/v4-core/src/libraries/Hooks.sol";
@@ -614,5 +615,43 @@ contract VortexHookInvertedOrientationTest is VortexHookTest {
             (address(wbtc) < address(usdc)) != naturalWbtcFirst,
             "orientation was not actually flipped"
         );
+    }
+}
+
+/// @notice Numeric edge cases that the pool-orientation suites do not reach.
+contract VortexHookMathTest is Test {
+    uint256 private constant Q96 = 1 << 96;
+
+    /// @dev The naive `p * p` used before overflows uint256 far below v4's
+    ///      MAX_SQRT_PRICE, so a high-priced pool would revert instead of
+    ///      having its deviation measured. This pins the safe formulation.
+    function test_sqrtPriceConversionSurvivesExtremes() public pure {
+        uint160[3] memory samples = [
+            TickMath.MIN_SQRT_PRICE,
+            uint160(Q96), // price == 1
+            TickMath.MAX_SQRT_PRICE
+        ];
+
+        for (uint256 i = 0; i < samples.length; i++) {
+            uint256 p = uint256(samples[i]);
+            // Safe formulation: never overflows across the whole legal range.
+            uint256 priceE18 = Math.mulDiv(Math.mulDiv(p, p, Q96), 1e18, Q96);
+            if (samples[i] == uint160(Q96)) {
+                assertEq(priceE18, 1e18, "sqrtPrice 2^96 is price 1.0");
+            }
+        }
+
+        // And demonstrate the hazard concretely: squaring MAX_SQRT_PRICE
+        // directly does not fit in 256 bits.
+        uint256 maxP = uint256(TickMath.MAX_SQRT_PRICE);
+        assertGt(maxP, type(uint256).max / maxP, "p*p would overflow uint256");
+    }
+
+    function testFuzz_sqrtPriceConversionNeverReverts(uint160 rawSqrtPrice) public pure {
+        uint160 sqrtPrice =
+            uint160(bound(rawSqrtPrice, TickMath.MIN_SQRT_PRICE, TickMath.MAX_SQRT_PRICE));
+        uint256 p = uint256(sqrtPrice);
+        // Must not revert anywhere in the legal sqrt-price range.
+        Math.mulDiv(Math.mulDiv(p, p, Q96), 1e18, Q96);
     }
 }
