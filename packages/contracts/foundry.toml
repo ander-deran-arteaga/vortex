@@ -60,6 +60,22 @@ paths = "node_modules/@uniswap/v4-core/src/PoolManager.sol"
 version = "0.8.26"
 via_ir = false
 
+# Pinned so the suite is bit-for-bit reproducible: without a seed, forge draws a
+# fresh one per run, so a fuzz test with a rare failing input is red only
+# sometimes. An intermittently red suite trains people to re-run instead of
+# investigate. Uniswap v4-core pins its seed for the same reason.
+#
+# The cost is real and deliberate: a fixed seed explores the same inputs every
+# time, so it stops finding NEW ones. Bump the seed when you want fresh
+# exploration, and treat any failure it surfaces as a genuine finding.
+[profile.default.fuzz]
+runs = 256
+seed = "0x564f52544558"  # "VORTEX"
+
+[profile.ci.fuzz]
+runs = 1024
+seed = "0x564f52544558"
+
 [fmt]
 single_line_statement_blocks = "multi"
 multiline_func_header = "all"
