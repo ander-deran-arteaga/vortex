@@ -67,16 +67,25 @@ echo "==> 2/3 seeding the demo Vortex Swap strategy"
     --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
 )
 
-echo "==> 3/3 deploying Vortex PermAMM (real v4 PoolManager, hook, pool)"
+echo "==> 3/4 deploying Vortex PermAMM (real v4 PoolManager, hook, pool)"
 (
   cd "$ROOT/packages/contracts"
   forge script script/DeployPermAMM.s.sol \
     --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
 )
 
+echo "==> 4/4 deploying Vortex Grow (compounder, simulated venue, shipped strategy)"
+(
+  cd "$ROOT/packages/contracts"
+  forge script script/DeployGrow.s.sol \
+    --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
+)
+
 echo "==> deployments/${DEPLOY_OUT} refreshed:"
 cat "$ROOT/deployments/${DEPLOY_OUT}"
-echo "==> demo strategy:"
+echo "==> demo Vortex Swap strategy:"
 cat "$ROOT/deployments/31337.demo.json" 2>/dev/null || true
+echo "==> Vortex Grow strategy:"
+cat "$ROOT/deployments/31337.grow.json" 2>/dev/null || true
 echo "==> chain ready at $RPC (Ctrl-C to stop)"
 wait "$ANVIL_PID"
