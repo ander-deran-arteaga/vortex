@@ -20,6 +20,7 @@ import { MockWBTC } from "../../src/mocks/MockWBTC.sol";
 import { VortexFeeAuthorizationLib, VortexPermFeeAuthorization } from "../../src/permamm/VortexFeeAuthorization.sol";
 import { VortexHook } from "../../src/permamm/VortexHook.sol";
 import { VortexLiquidityManager } from "../../src/permamm/VortexLiquidityManager.sol";
+import { VortexQuoter } from "../../src/permamm/VortexQuoter.sol";
 import { VortexRouter } from "../../src/permamm/VortexRouter.sol";
 
 /// @notice Phase 5 exit gate: a REAL Uniswap v4 pool with a REAL hook, where a
@@ -443,6 +444,48 @@ contract VortexHookTest is Test {
 
     function test_missingHookDataReverts() public {
         _expectSwapRevert(VortexHook.VortexHookDataRequired.selector, true, 0.01e8, "");
+    }
+
+    function test_quoteMatchesSwapAndDoesNotConsumeNonce() public {
+        VortexQuoter quoter = new VortexQuoter(poolManager);
+        uint128 amountIn = wbtcIsCurrency0 ? 0.01e8 : 1_000e6;
+
+        VortexPermFeeAuthorization memory auth = _auth(true, -int256(uint256(amountIn)), 1_000);
+        bytes memory hookData = _hookData(auth, feeSignerKey);
+
+        vm.prank(swapper);
+        (uint256 quotedIn, uint256 quotedOut) =
+            quoter.quoteExactInput(key, true, amountIn, 0, hookData);
+
+        // Quoting runs the whole hook path but settles nothing, so the
+        // authorization is still spendable afterwards.
+        assertFalse(hook.usedFeeNonces(swapper, auth.nonce), "quote must not burn the nonce");
+
+        vm.prank(swapper);
+        uint256 executedOut = router.swapExactInput(key, true, amountIn, 0, 0, hookData, swapper);
+
+        assertEq(quotedIn, amountIn, "quoted input matches the request");
+        assertEq(quotedOut, executedOut, "quote equals execution");
+        assertTrue(hook.usedFeeNonces(swapper, auth.nonce), "execution burns the nonce");
+    }
+
+    function test_quoteSurfacesHookRejections() public {
+        VortexQuoter quoter = new VortexQuoter(poolManager);
+        (, uint256 malloryKey) = makeAddrAndKey("mallory");
+        VortexPermFeeAuthorization memory auth = _auth(true, -int256(uint256(uint128(0.01e8))), 1_000);
+
+        // A rejected swap must not be reported as a quote of zero.
+        vm.prank(swapper);
+        (bool ok, bytes memory returndata) = address(quoter).call(
+            abi.encodeCall(
+                VortexQuoter.quoteExactInput, (key, true, 0.01e8, 0, _hookData(auth, malloryKey))
+            )
+        );
+        assertFalse(ok, "quote must propagate the rejection");
+        assertTrue(
+            _containsSelector(returndata, VortexHook.VortexBadFeeSignature.selector),
+            "rejection reason is preserved"
+        );
     }
 
     function test_typehashMatchesSharedDefinition() public pure {
