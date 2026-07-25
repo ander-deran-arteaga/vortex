@@ -19,6 +19,13 @@ on:
       - "tsconfig.base.json"
       - ".github/workflows/typescript.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: typescript-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-test:
     runs-on: ubuntu-latest

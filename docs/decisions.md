@@ -66,3 +66,40 @@ switches to it.
 `VortexPermSwap` (hook afterSwap) and `VortexGrowExecuted` (compounder
 settlement), with the field lists from the master plan. The indexer binds to
 these exact names.
+
+## D-010 — Timestamps cross the API as epoch milliseconds
+
+Every `expiresAt` / `timestamp` field in the shared schemas is epoch
+milliseconds, matching `Date.now()` so neither side multiplies or divides.
+Solidity deadlines remain epoch **seconds** (uint40) — the backend converts at
+the signing boundary, and that conversion is the only place the two units
+meet.
+
+## D-011 — Quote sessions live 45 seconds and are single-use
+
+A quote session expires 45 s after issue and is consumed on first successful
+transaction build. Uniswap's guidance is to refresh quotes older than ~30 s,
+so the backend re-requests construction data past 30 s rather than serving a
+stale route. The browser holds only the session id; it never mutates
+target/data/value.
+
+## D-012 — Fork deployment artifacts are not committed
+
+`deployments/<chainId>.json` holds reviewed, committed addresses. Ephemeral
+fork runs write `deployments/<chainId>.fork.json`, which is gitignored, so a
+local anvil session can never clobber the committed record. Dry runs write
+nothing.
+
+## D-013 — Uniswap Trade API facts are recorded with provenance
+
+`docs/uniswap-api.md` tags every claim `[VERIFIED <url>]` or `[UNVERIFIED]`,
+and keeps contradictions between research passes rather than silently picking
+one. Nothing in the client is built on an `[UNVERIFIED]` claim without first
+confirming it against the live API. Remembered API behavior is never trusted.
+
+## D-014 — CI workflows declare least privilege and cancel superseded runs
+
+Every workflow sets `permissions: {contents: read}` and a
+`concurrency` group keyed on the ref with `cancel-in-progress`. Action
+version pinning by commit SHA is deliberately deferred: it has no sponsor
+qualification value and the kill rules say defer such polish.

@@ -13,6 +13,13 @@ on:
       - "pnpm-lock.yaml"
       - ".github/workflows/contracts.yml"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: contracts-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
