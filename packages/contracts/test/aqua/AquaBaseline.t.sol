@@ -6,6 +6,7 @@ import { stdError } from "forge-std/StdError.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
+import { SafeERC20 } from "@1inch/solidity-utils/contracts/libraries/SafeERC20.sol";
 
 import { MockUSDC } from "../../src/mocks/MockUSDC.sol";
 import { MockWBTC } from "../../src/mocks/MockWBTC.sol";
@@ -58,9 +59,21 @@ contract AquaBaselineTest is Test {
     }
 
     function test_makerApprovesAqua() public {
+        _ship();
+
+        // Without the ERC20 approval the shipped strategy is unexecutable...
+        vm.prank(app);
+        vm.expectRevert(SafeERC20.SafeTransferFromFailed.selector);
+        aqua.pull(maker, strategyHash, address(wbtc), 1, taker);
+
+        // ...and the approval alone is what turns it executable.
         _approveAqua();
         assertEq(wbtc.allowance(maker, address(aqua)), type(uint256).max);
         assertEq(usdc.allowance(maker, address(aqua)), type(uint256).max);
+
+        vm.prank(app);
+        aqua.pull(maker, strategyHash, address(wbtc), 1, taker);
+        assertEq(wbtc.balanceOf(taker), 1);
     }
 
     function test_makerShipsStrategy() public {
@@ -216,8 +229,10 @@ contract AquaBaselineTest is Test {
     function test_pullWithoutMakerApprovalReverts() public {
         _ship(); // no ERC20 approval to Aqua
 
+        // Specifically the transfer failure — an accounting underflow would be
+        // a different (and wrong) revert.
         vm.prank(app);
-        vm.expectRevert();
+        vm.expectRevert(SafeERC20.SafeTransferFromFailed.selector);
         aqua.pull(maker, strategyHash, address(wbtc), 1e8, taker);
     }
 

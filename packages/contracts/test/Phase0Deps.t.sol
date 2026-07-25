@@ -5,7 +5,11 @@ import { Test } from "forge-std/Test.sol";
 
 import { Aqua } from "@1inch/aqua/src/Aqua.sol";
 import { AquaSwapVMRouter } from "@1inch/swap-vm/src/routers/AquaSwapVMRouter.sol";
+// Compile-time dependency proof: v4-core interfaces must import cleanly under 0.8.30.
 import { IPoolManager } from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+
+// Reference the type so the import is load-bearing, not decorative.
+IPoolManager constant V4_INTERFACE_PROOF = IPoolManager(address(0));
 
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 import { MockUSDC } from "../src/mocks/MockUSDC.sol";
@@ -31,9 +35,6 @@ contract Phase0DepsTest is Test {
             "1.0.1"
         );
         assertGt(address(router).code.length, 0);
-
-        // v4-core interface is importable; full PoolManager lands in Phase 5.
-        assertEq(type(IPoolManager).interfaceId, type(IPoolManager).interfaceId);
     }
 
     function test_aquaVirtualBalanceBookkeeping() public {

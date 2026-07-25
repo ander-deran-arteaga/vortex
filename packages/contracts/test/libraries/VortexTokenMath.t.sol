@@ -28,12 +28,27 @@ contract VortexTokenMathTest is Test {
     }
 
     function test_decimalsAbove18Revert() public {
-        vm.expectRevert(abi.encodeWithSelector(VortexTokenMath.DecimalsAboveInternalScale.selector, uint8(19)));
+        bytes memory expectedError =
+            abi.encodeWithSelector(VortexTokenMath.DecimalsAboveInternalScale.selector, uint8(19));
+
+        vm.expectRevert(expectedError);
         this.toE18External(1, 19);
+        vm.expectRevert(expectedError);
+        this.fromE18FloorExternal(1, 19);
+        vm.expectRevert(expectedError);
+        this.fromE18CeilExternal(1, 19);
     }
 
     function toE18External(uint256 amount, uint8 decimals) external pure returns (uint256) {
         return VortexTokenMath.toE18(amount, decimals);
+    }
+
+    function fromE18FloorExternal(uint256 amountE18, uint8 decimals) external pure returns (uint256) {
+        return VortexTokenMath.fromE18Floor(amountE18, decimals);
+    }
+
+    function fromE18CeilExternal(uint256 amountE18, uint8 decimals) external pure returns (uint256) {
+        return VortexTokenMath.fromE18Ceil(amountE18, decimals);
     }
 
     function test_priceMathKnownValues() public pure {
