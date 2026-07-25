@@ -186,3 +186,72 @@ Response (`CreateSwapResponse`): `requestId`, `swap` (TransactionRequest), optio
 9. **Quote freshness in practice**: measure how long a quote+permit remains executable on Arbitrum (spec has no TTL; 30 s is guidance only) and pick our `deadline` policy.
 10. **OpenAPI spec URL stability**: re-confirm `https://trade-api.gateway.uniswap.org/v1/api.json` remains published (one research pass could not locate it). [CONFLICT above]
 11. **`x-erc20eth-enabled`** relevance: only if we ever route native ETH via UniswapX — likely N/A given we force classic; confirm and drop.
+---
+
+# Live verification (2026-07-25, Arbitrum One, real API key)
+
+Every claim below was executed against the production API from
+`apps/api`'s configured key. This section **supersedes** the tagged research
+above wherever they disagree; the research tags are deliberately preserved
+(master D-013) so the provenance of each correction stays visible.
+
+## Resolved conflicts
+
+| # | Question | Live answer |
+|---|---|---|
+| 1 | Rate limit + `Retry-After` | 12 concurrent `/quote`s → **5×429**, so the effective ceiling sits near the documented 6 RPS/key. **No `Retry-After` header** is sent. |
+| 2 | Error envelope | **`{errorCode, detail}` (the OpenAPI spec shape) wins.** The integration guide's `{error, message, details}` never appeared. 429 bodies also carry `requestId`. |
+| 6 | UR version on Arbitrum | Default is **2.0**; `/swap` `to` = `0xA51afAFe0263b40EdaEf0Df8781eA9aa03E381a3`, calldata selector `0x3593564c` (`execute(bytes,bytes[],uint256)`). |
+| 8 | Forced-classic guarantee | `protocols: ["V2","V3","V4"]` returned `routing: "CLASSIC"` on every probe, incl. `EXACT_OUTPUT` and contract swappers. |
+| 10 | OpenAPI spec URL | **Stable** — `/v1/api.json` → 200, title "Token Trading", 26 paths. |
+
+## Corrections to the documented behavior (FEEDBACK.md candidates)
+
+1. **429 `errorCode` is `TooManyRequests`, not `Ratelimited`.** The
+   common-errors page documents `Ratelimited`; the live body is
+   `{"errorCode":"TooManyRequests","detail":"Rate limit exceeded","requestId":"..."}`.
+   Code matching on the documented string would silently miss every rate-limit
+   error.
+2. **The proxy flow still returns the *deprecated* proxy address.** With
+   `x-permit2-disabled: true`, both `/swap` (`to`) and `/check_approval`
+   (approve spender) return `0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9` —
+   the address the no-permit2-workflow page explicitly tells integrators to
+   migrate *away from*, not the current
+   `0x0000000085E102724e78eCd2F45DC9cA239Affad`.
+3. **Undocumented `/swap` response fields**: `signature` and `publicKeyId`
+   appear at the top level alongside `requestId`/`gasFee`/`swap`. Neither is
+   in the spec's `CreateSwapResponse`.
+4. **Undocumented `/quote` field**: `gasEstimates` (array) is returned on
+   `ClassicQuote` but absent from the spec.
+
+## Verified request/response facts the client is built on
+
+- **`/swap` with `permitData` omitted returns a fully broadcastable tx.** No
+  signature is required when the caller does not echo `permitData`.
+- **Pairing rule enforced server-side**: sending `permitData` *without*
+  `signature` → `400 RequestValidationError`,
+  `"value" contains [permitData] without its required peers [signature]`.
+  Send both or neither.
+- **`gasFeeQuote` is gas cost denominated in the output token's base units**
+  (e.g. `"3751"` = 0.003751 USDC). This is what makes a like-for-like net
+  comparison against an Aqua quote possible without an ETH price feed —
+  `gasFeeQuote / gasUseEstimate` yields a per-gas-unit rate in the output
+  token that the Aqua leg's gas estimate can be priced with.
+- **`EXACT_OUTPUT` works and returns `input.maximumAmount`** — the exact spend
+  cap the Grow bridge leg needs (Phase 6/7).
+- **A contract address is accepted as `swapper`** (probed with
+  `x-permit2-disabled: true`): `200`, `routing: CLASSIC`, empty
+  `txFailureReasons`. Phase 7 question 3 is answered for the quote step;
+  execution from inside a contract call remains unproven.
+- **Permit2 approval spender** is canonical Permit2
+  `0x000000000022D473030F116dDEE9F6B43aC78BA3`; **proxy-flow spender** is the
+  legacy proxy above.
+- Sample live economics (0.01 WBTC → USDC, 0.3% slippage): out `640.148143`
+  USDC, minimum `638.227698`, `gasUseEstimate` 100618, `gasFeeUSD`
+  `0.00375…`, `priceImpact` 0.05.
+
+## Still unverified
+
+Executing API calldata from inside a contract call (Phase 7 spike), EIP-1271
+in the Permit2 flow, `/swap_5792` and `/swap_7702` contents, and FoT
+double-fee behavior. Nothing in the client depends on these.
