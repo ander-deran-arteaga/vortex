@@ -250,8 +250,54 @@ above wherever they disagree; the research tags are deliberately preserved
   USDC, minimum `638.227698`, `gasUseEstimate` 100618, `gasFeeUSD`
   `0.00375…`, `priceImpact` 0.05.
 
+## Contract-as-swapper spike — RESOLVED (2026-07-25, Arbitrum One fork)
+
+The Phase 7 prerequisite. A purpose-built throwaway contract was deployed to a
+pinned Arbitrum fork, funded with WBTC, and used to execute calldata built by
+the **live** Trade API. Harness lived in the scratchpad and is not part of the
+repo; it is deliberately unsafe (arbitrary target, no access control) and is
+**not** VortexCompounder.
+
+**Q2 — can a contract approve the proxy and execute API calldata in ONE
+transaction? YES.** This was the open risk for Phase 7 and it is closed.
+
+```
+executor (contract) 0xe624e791e2acbecc1d87b4d761a087615e5cda82
+tx  0xe41adb01d06c9240b99a8cd88a258e957dc372ed2f1f5e5e9ac0eda2d6e4e3b1  success
+    WBTC spent    1000000        (0.01)
+    USDC received 642239090      (quoted minimum 639044967)
+    relayed by    0x7504592FfDF766A53FfDAfc299bbC72A792050c2 (a different EOA)
+```
+
+`approve(proxy, amount)` followed by `target.call(data)` in the same function
+body works — the allowance granted earlier in the transaction is visible to
+the proxy when it pulls the tokens. No prior approval transaction and no
+infinite pre-approval is required.
+
+**Q4 — is `recipient` honored when the swapper is a contract? YES.** Quoting
+with `recipient` set to a third address returned that address in
+`quote.output.recipient`, and on execution the output landed there directly
+from the router: recipient `+642221933` USDC, executor `+0`. The Grow
+compounder can therefore have the router deliver output wherever the route
+requires without an extra transfer.
+
+**Q5 — does the API object to a contract `swapper`, or to an EOA relaying it?
+NO.** `/quote` returns 200 `CLASSIC` with empty `txFailureReasons`, `/swap`
+returns 200 with `from` set to the contract address, and the transaction
+succeeds when a completely different EOA submits it. `from` is advisory; the
+executing sender is what the proxy authorises against.
+
+**Q3 — EIP-1271 in the Permit2 flow: still not needed.** `x-permit2-disabled`
+returns `permitData: null`, so no signature is produced and none is required.
+The proxy flow is the documented and now empirically confirmed path for
+contract swappers.
+
+Caveat carried forward: the spike proves the *mechanism*. VortexCompounder
+must still constrain target, calldata hash, recipient, and minimum output —
+the harness constrains none of those by design.
+
 ## Still unverified
 
-Executing API calldata from inside a contract call (Phase 7 spike), EIP-1271
-in the Permit2 flow, `/swap_5792` and `/swap_7702` contents, and FoT
-double-fee behavior. Nothing in the client depends on these.
+`/swap_5792` and `/swap_7702` contents, and FoT double-fee behavior under the
+proxy flow. Neither is on the Vortex path: WBTC and USDC are not
+fee-on-transfer, and Vortex does not use account abstraction.
