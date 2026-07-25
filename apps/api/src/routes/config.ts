@@ -18,7 +18,12 @@ export function registerConfigRoutes(
     features: {
       // Grow execution stays off until Phase 6 opens the compound route.
       growEnabled: false,
-      demoMode: ctx.env.DEMO_MODE,
+      // MASTER Addendum 4 §3: DEMO_MODE gates the labeling of simulated
+      // venues. While the Aqua leg is served by the deterministic fixture,
+      // some of the quoted data IS simulated, so the flag is forced on — the
+      // UI must never present a fixture number as a live one (§21).
+      demoMode:
+        ctx.env.DEMO_MODE || ctx.exchange.aquaSource.kind === "fixture",
     },
   }));
 }
