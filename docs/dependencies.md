@@ -17,3 +17,20 @@ floating branches — every pin below is an exact tag or version resolved to a c
 Toolchain: Foundry `1.5.1` (CI-pinned), solc `0.8.30` (exact — required by aqua
 and swap-vm sources), evm `cancun` (transient storage used by `AquaApp`
 reentrancy locks).
+
+## Version-skew acknowledgments
+
+- **swap-vm ↔ aqua/solidity-utils**: swap-vm v1.0.1 declares
+  `@1inch/aqua#v1.0.0` (matches our pin) but `@1inch/solidity-utils@6.9.10`,
+  while aqua v1.0.0 declares `6.9.7`. We compile everything against a single
+  copy, `6.9.10` (the stricter requirement); the 6.9.7→6.9.10 delta does not
+  touch the APIs aqua consumes (SafeERC20, TransientLock).
+- **swap-vm v1.0.1 ≠ swap-vm main**: the ISwapVM API differs between our pin
+  and current main (v1.0.1 `swap(order, tokenIn, tokenOut, amount, takerData)`
+  vs main's 3-arg form; opcode dispatch table vs enum). All Vortex code and
+  docs target the PINNED v1.0.1 API only — never consult main when editing.
+- **v4-core PoolManager is `pragma solidity 0.8.26` (exact)** and cannot be
+  compiled inside our 0.8.30 build. Phase 5 imports v4-core
+  interfaces/libraries only; a live PoolManager comes from an Arbitrum fork
+  (`scripts/bootstrap-fork.sh` with `FORK_RPC_URL`) or `vm.etch`ed prebuilt
+  bytecode in tests.

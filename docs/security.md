@@ -53,7 +53,9 @@ floors.
 - amountOut <= executable balance or revert.
 - Rounding always favors the maker (VortexTokenMath floor/ceil discipline).
 - Signed rebate: bound-clamped, deadline-scoped, bound to
-  taker/orderHash/amount/quoteId (see channel note on nonce strategy).
+  taker/orderHash/amount/quoteId, and nonce-protected — the nonce is consumed
+  on the swap path and verified-unused on the static quote path (the
+  Extruction target is only forced to be `view` in static context).
 
 ### Phase 5 — Vortex PermAMM (planned, §8.3)
 - Dynamic-fee pool only; external liquidity forbidden (single managed position).
