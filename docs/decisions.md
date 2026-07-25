@@ -141,6 +141,29 @@ the original plan is therefore not built; `VortexAquaOrderBuilder` and
 `VortexAquaLens` provide the order construction and health views around the
 official router.
 
+## D-017 — Uniswap v4 PoolManager enters the build as its own compilation unit
+
+v4-core's `PoolManager` is `pragma solidity 0.8.26` exact, while every Vortex
+contract is 0.8.30 (Aqua and SwapVM require it). Solidity resolves one compiler
+version per compilation unit — a file plus its transitive imports — so no
+0.8.30 file can import `PoolManager`.
+
+`packages/contracts/src/v4/V4Deps.sol` exists solely to pull v4-core into the
+build as a separate 0.8.26 unit, producing the artifact. Tests then instantiate
+the genuine contract by artifact rather than by type:
+
+```solidity
+poolManager = IPoolManager(deployCode("PoolManager.sol:PoolManager", abi.encode(owner)));
+```
+
+Vortex contracts import only `^0.8.0` v4 interfaces and libraries
+(`IPoolManager`, `IHooks`, `Hooks`, `Currency`, `BalanceDelta`,
+`BeforeSwapDelta`, `IUnlockCallback`), never the concrete pool.
+
+Chosen over a mainnet fork or `vm.etch` because it keeps contract CI
+deterministic with no RPC endpoint and no API key, while still exercising the
+real PoolManager bytecode rather than a mock.
+
 ## D-014 — CI workflows declare least privilege and cancel superseded runs
 
 Every workflow sets `permissions: {contents: read}` and a
