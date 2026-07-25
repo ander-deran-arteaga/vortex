@@ -30,10 +30,18 @@ import { MockERC20 } from "../src/mocks/MockERC20.sol";
 ///      `threshold` so the CHAIN enforces slippage, not the caller.
 contract ExecuteDemoSwap is Script {
     function run() external {
-        string memory deployment =
-            vm.readFile(string.concat("../../deployments/", vm.toString(block.chainid), ".json"));
-        string memory demo =
-            vm.readFile(string.concat("../../deployments/", vm.toString(block.chainid), ".demo.json"));
+        string memory deployment = vm.readFile(
+            string.concat(
+                "../../deployments/",
+                vm.envOr("DEPLOY_OUT", string.concat(vm.toString(block.chainid), ".json"))
+            )
+        );
+        string memory demo = vm.readFile(
+            string.concat(
+                "../../deployments/",
+                vm.envOr("SEED_OUT", string.concat(vm.toString(block.chainid), ".demo.json"))
+            )
+        );
 
         address router = vm.parseJsonAddress(deployment, ".contracts.AquaSwapVMRouter");
         MockERC20 wbtc = MockERC20(vm.parseJsonAddress(deployment, ".contracts.MockWBTC"));
@@ -64,7 +72,12 @@ contract ExecuteDemoSwap is Script {
         uint256 makerUsdcBefore = usdc.balanceOf(maker);
 
         vm.startBroadcast(takerKey);
-        wbtc.mint(taker, amountIn); // local demo convenience; mocks are mintable
+        // Mocks are mintable; real tokens on a fork are not, so the taker must
+        // already hold the input (bootstrap-fork.sh funds it from a whale).
+        if (!vm.envOr("USE_REAL_TOKENS", false)) {
+            wbtc.mint(taker, amountIn);
+        }
+        require(wbtc.balanceOf(taker) >= amountIn, "taker underfunded for the demo swap");
         wbtc.approve(router, amountIn);
         (uint256 amountInUsed, uint256 amountOut,) = ISwapVM(router).swap(
             order, address(wbtc), address(usdc), amountIn, _traits(taker, abi.encode(minOut))

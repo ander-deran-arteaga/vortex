@@ -33,7 +33,12 @@ contract SeedDemo is Script {
     uint256 internal constant VERIFY_QUOTE_AMOUNT = 0.05e8; // 0.05 WBTC reference fill
 
     function run() external {
-        string memory deploymentPath = string.concat("../../deployments/", vm.toString(block.chainid), ".json");
+        // On a fork the deployment lands in a *.fork.json file, never in the
+        // committed <chainid>.json — see bootstrap-fork.sh.
+        string memory deploymentPath = string.concat(
+            "../../deployments/",
+            vm.envOr("DEPLOY_OUT", string.concat(vm.toString(block.chainid), ".json"))
+        );
         string memory deployment = vm.readFile(deploymentPath);
 
         Aqua aqua = Aqua(vm.parseJsonAddress(deployment, ".contracts.Aqua"));
@@ -76,11 +81,20 @@ contract SeedDemo is Script {
 
         (ISwapVM.Order memory order, bytes32 strategyHash) = orderBuilder.buildOrder(params);
 
-        // Fund the maker (mock tokens are freely mintable on the local chain).
-        vm.startBroadcast();
-        wbtc.mint(maker, DEMO_WBTC);
-        usdc.mint(maker, DEMO_USDC);
-        vm.stopBroadcast();
+        // Mocks are freely mintable; real tokens on a fork are not, so the
+        // caller funds the maker beforehand (bootstrap-fork.sh does it by
+        // impersonating a whale) and we verify rather than assume.
+        bool useRealTokens = vm.envOr("USE_REAL_TOKENS", false);
+        if (!useRealTokens) {
+            vm.startBroadcast();
+            wbtc.mint(maker, DEMO_WBTC);
+            usdc.mint(maker, DEMO_USDC);
+            vm.stopBroadcast();
+        }
+        require(
+            wbtc.balanceOf(maker) >= DEMO_WBTC && usdc.balanceOf(maker) >= DEMO_USDC,
+            "seed: maker underfunded; a shipped strategy it cannot cover is phantom liquidity"
+        );
 
         address[] memory tokens = new address[](2);
         tokens[0] = address(wbtc);

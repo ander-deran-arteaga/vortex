@@ -11,7 +11,7 @@ coverage/
 # foundry
 cache/
 broadcast/
-deployments/*.fork.json
+deployments/*fork*.json
 
 # env
 .env

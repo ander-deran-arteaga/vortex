@@ -15,10 +15,18 @@ import { TakerTraitsLib } from "@1inch/swap-vm/src/libs/TakerTraits.sol";
 ///      oracle — without going through the API.
 contract QuoteDemo is Script {
     function run() external view {
-        string memory deployment =
-            vm.readFile(string.concat("../../deployments/", vm.toString(block.chainid), ".json"));
-        string memory demo =
-            vm.readFile(string.concat("../../deployments/", vm.toString(block.chainid), ".demo.json"));
+        string memory deployment = vm.readFile(
+            string.concat(
+                "../../deployments/",
+                vm.envOr("DEPLOY_OUT", string.concat(vm.toString(block.chainid), ".json"))
+            )
+        );
+        string memory demo = vm.readFile(
+            string.concat(
+                "../../deployments/",
+                vm.envOr("SEED_OUT", string.concat(vm.toString(block.chainid), ".demo.json"))
+            )
+        );
 
         address router = vm.parseJsonAddress(deployment, ".contracts.AquaSwapVMRouter");
         address wbtc = vm.parseJsonAddress(deployment, ".contracts.MockWBTC");

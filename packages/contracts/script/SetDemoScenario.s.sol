@@ -36,7 +36,10 @@ contract SetDemoScenario is Script {
     uint256 internal constant HALF_SPREAD_BPS = 5;
 
     function run() external {
-        string memory path = string.concat("../../deployments/", vm.toString(block.chainid), ".json");
+        string memory path = string.concat(
+            "../../deployments/",
+            vm.envOr("DEPLOY_OUT", string.concat(vm.toString(block.chainid), ".json"))
+        );
         MockReferenceOracle oracle =
             MockReferenceOracle(vm.parseJsonAddress(vm.readFile(path), ".contracts.MockReferenceOracle"));
 

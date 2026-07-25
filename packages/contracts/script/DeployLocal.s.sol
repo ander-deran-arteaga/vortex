@@ -16,19 +16,31 @@ import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 import { MockUSDC } from "../src/mocks/MockUSDC.sol";
 import { MockWBTC } from "../src/mocks/MockWBTC.sol";
 
-/// @notice Deterministic local deployment: official Aqua + official
-///         AquaSwapVMRouter + WBTC/USDC/WETH mocks. Writes addresses to
-///         deployments/<chainId>.json for the api/web workspaces.
+/// @notice Deploys official Aqua + official AquaSwapVMRouter + the Vortex Swap
+///         stack, and writes addresses to deployments/<chainId>.json.
+///
+/// @dev Tokens default to freshly deployed mocks (offline, deterministic). Set
+///      `WBTC_ADDRESS` / `USDC_ADDRESS` / `WETH_ADDRESS` to run against tokens
+///      that already exist — the Arbitrum-fork demo needs real WBTC/USDC so the
+///      Uniswap Trade API can quote the same assets Vortex settles. Mocks are
+///      mintable and real tokens are not, so anything downstream that funds an
+///      account must check `USE_REAL_TOKENS` rather than assume it can mint.
 contract DeployLocal is Script {
     function run() external {
+        address wbtcOverride = vm.envOr("WBTC_ADDRESS", address(0));
+        address usdcOverride = vm.envOr("USDC_ADDRESS", address(0));
+        address wethOverride = vm.envOr("WETH_ADDRESS", address(0));
+
         vm.startBroadcast();
 
         Aqua aqua = new Aqua();
-        MockWBTC wbtc = new MockWBTC();
-        MockUSDC usdc = new MockUSDC();
-        MockERC20 weth = new MockERC20("Wrapped Ether", "WETH", 18);
+        address wbtc = wbtcOverride == address(0) ? address(new MockWBTC()) : wbtcOverride;
+        address usdc = usdcOverride == address(0) ? address(new MockUSDC()) : usdcOverride;
+        address weth = wethOverride == address(0)
+            ? address(new MockERC20("Wrapped Ether", "WETH", 18))
+            : wethOverride;
         AquaSwapVMRouter router =
-            new AquaSwapVMRouter(address(aqua), address(weth), msg.sender, "AquaSwapVMRouter", "1.0.1");
+            new AquaSwapVMRouter(address(aqua), weth, msg.sender, "AquaSwapVMRouter", "1.0.1");
 
         // Vortex Swap stack (Phase 2).
         MockReferenceOracle oracle = new MockReferenceOracle(msg.sender);
@@ -43,9 +55,9 @@ contract DeployLocal is Script {
         vm.serializeUint(root, "chainId", block.chainid);
         string memory contracts = "contracts";
         vm.serializeAddress(contracts, "Aqua", address(aqua));
-        vm.serializeAddress(contracts, "MockWBTC", address(wbtc));
-        vm.serializeAddress(contracts, "MockUSDC", address(usdc));
-        vm.serializeAddress(contracts, "MockWETH", address(weth));
+        vm.serializeAddress(contracts, "MockWBTC", wbtc);
+        vm.serializeAddress(contracts, "MockUSDC", usdc);
+        vm.serializeAddress(contracts, "MockWETH", weth);
         vm.serializeAddress(contracts, "MockReferenceOracle", address(oracle));
         vm.serializeAddress(contracts, "VortexAquaPricing", address(pricing));
         vm.serializeAddress(contracts, "VortexAquaOrderBuilder", address(orderBuilder));
