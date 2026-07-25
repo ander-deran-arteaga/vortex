@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { USDC, WBTC, type ExchangeQuoteResponse } from "@vortex/shared";
-import { FIXTURE_STRATEGY_HASH, fetchExchangeQuote } from "@/lib/api";
+import { ApiContractError, ApiRequestError, fetchExchangeQuote } from "@/lib/api";
 import type { DataSource } from "@/lib/api/source";
 import {
   canSend,
@@ -11,10 +11,34 @@ import {
   swapReducer,
   type SwapEvent,
 } from "@/lib/machines/swapMachine";
+import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import { secondsUntil } from "@/lib/swap-selection";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const LOCAL_FORK_CHAIN_ID = 31337;
+
+/**
+ * The API's own code, verbatim, in front of its message. Seeing
+ * `AQUA_ORDER_UNAVAILABLE` instead of a generic sentence is what lets a user
+ * tell an environment gap (a strategy hash that was never shipped on this
+ * chain) apart from a trade the maker simply will not price.
+ */
+function quoteFailureReason(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    return `${error.code}: ${error.message}`;
+  }
+  return error instanceof Error ? error.message : "Quote request failed";
+}
+
+/**
+ * An error the API itself answered with is a LIVE response — it is not the
+ * fixture fallback, which only fires on `ApiUnavailableError` and never
+ * reaches this path. Recording its provenance is what lets the page separate
+ * "the API rejected this request" from "the API is not running".
+ */
+function isLiveResponseError(error: unknown): boolean {
+  return error instanceof ApiRequestError || error instanceof ApiContractError;
+}
 
 export interface RequestQuoteInput {
   amountIn: bigint;
@@ -70,7 +94,7 @@ export function useSwapFlow() {
         const result = await fetchExchangeQuote(
           {
             chainId: chain?.id === 42161 ? 42161 : LOCAL_FORK_CHAIN_ID,
-            strategyHash: FIXTURE_STRATEGY_HASH,
+            strategyHash: STRATEGY_HASHES.swap,
             tokenIn: WBTC.address,
             tokenOut: USDC.address,
             amountIn: amountIn.toString(),
@@ -93,9 +117,12 @@ export function useSwapFlow() {
         if (sequence !== sequenceRef.current) {
           return;
         }
+        if (isLiveResponseError(error)) {
+          setSource("live");
+        }
         dispatchIfAllowed({
           type: "QUOTE_FAILURE",
-          reason: error instanceof Error ? error.message : "Quote request failed",
+          reason: quoteFailureReason(error),
         });
       }
     },

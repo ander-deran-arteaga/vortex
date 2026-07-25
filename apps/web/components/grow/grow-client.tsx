@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useAccount } from "wagmi";
 import { WBTC } from "@vortex/shared";
 import { OpportunityCard } from "@/components/grow/opportunity-card";
 import { ProfitBreakdown } from "@/components/grow/profit-breakdown";
 import { PageHeader } from "@/components/page-header";
-import { FixtureNotice } from "@/components/source-badge";
+import { FixtureNotice, SourceBadge } from "@/components/source-badge";
+import { useGrowExecution, type GrowSettlement } from "@/hooks/useGrowExecution";
 import { useGrowFlow } from "@/hooks/useGrowFlow";
-import { parseTokenAmount } from "@/lib/format";
+import { formatTokenAmount, parseTokenAmount, truncateAddress } from "@/lib/format";
 import type { GrowState } from "@/lib/machines/growMachine";
 
 const DEFAULT_PRINCIPAL = "1.00000000";
@@ -19,7 +21,7 @@ const STATUS_COPY: Record<GrowState, string | null> = {
   OPPORTUNITY_READY: "Opportunity found. Review the numbers before preparing the route.",
   REFRESHING: "Re-pricing the opportunity…",
   PREPARING_ROUTE: "Preparing and authorizing the route…",
-  SIMULATING: "Route prepared. Simulating the cycle before execution.",
+  SIMULATING: "Simulating the prepared transaction before anything is broadcast…",
   EXECUTING: "Executing the atomic cycle…",
   CONFIRMED: "Cycle confirmed.",
   FAILED: null,
@@ -84,6 +86,126 @@ function FlowEdge({ label }: { label: string }) {
   );
 }
 
+function SettlementRow({
+  label,
+  value,
+  mono = true,
+  emphasis = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <dt className="shrink-0 text-sm text-zinc-400">{label}</dt>
+      <dd
+        className={`${mono ? "font-mono tabular-nums" : ""} break-all text-right text-sm ${
+          emphasis ? "text-teal-300" : "text-zinc-100"
+        }`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * What actually happened onchain. Every number here was read back from the
+ * receipt or from an ERC-20 `balanceOf` at an explicit block; anything that
+ * could not be read renders as an em dash with the reason underneath, never as
+ * a plausible-looking placeholder.
+ */
+function SettlementPanel({ settlement }: { settlement: GrowSettlement }) {
+  const { makerAssetBefore: before, makerAssetAfter: after, assetDecimals } = settlement;
+  const amount = (value: bigint) => `${formatTokenAmount(value, assetDecimals)} WBTC`;
+  const delta = before === null || after === null ? null : after - before;
+
+  return (
+    <section
+      aria-live="polite"
+      className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6"
+    >
+      <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-xs font-medium uppercase tracking-widest text-zinc-500">
+          Settlement
+        </h2>
+        {/* A real receipt is what makes these numbers onchain facts; without
+            one there is nothing to label as live. */}
+        {settlement.receipt === "unverified" ? null : <SourceBadge source="live" />}
+      </header>
+
+      <dl className="divide-y divide-zinc-800/60">
+        <SettlementRow label="Transaction" value={settlement.txHash} />
+        <SettlementRow
+          label="Broadcast by"
+          mono={false}
+          value={
+            settlement.mode === "SOLVER"
+              ? "The Vortex solver (backend key)"
+              : "Your wallet (no solver configured)"
+          }
+        />
+        <SettlementRow
+          label="Receipt"
+          mono={false}
+          value={
+            settlement.receipt === "confirmed"
+              ? "Confirmed onchain"
+              : settlement.receipt === "reverted"
+                ? "Reverted onchain"
+                : "Not verified in this browser"
+          }
+        />
+        <SettlementRow
+          label="Block"
+          value={settlement.blockNumber === null ? "—" : settlement.blockNumber.toString()}
+        />
+        <SettlementRow
+          label="Maker"
+          value={settlement.maker === null ? "—" : truncateAddress(settlement.maker)}
+        />
+        <SettlementRow
+          label="Maker WBTC before"
+          value={before === null ? "—" : amount(before)}
+        />
+        <SettlementRow
+          label="Maker WBTC after"
+          value={after === null ? "—" : amount(after)}
+        />
+        <SettlementRow
+          label="Delta"
+          emphasis
+          value={
+            delta === null
+              ? "—"
+              : delta > 0n
+                ? `+ ${amount(delta)}`
+                : delta === 0n
+                  ? amount(0n)
+                  : `− ${amount(-delta)}`
+          }
+        />
+      </dl>
+
+      {settlement.balanceNote === null ? (
+        <p className="mt-3 text-xs text-zinc-500">
+          Balances read with <code>balanceOf</code> at blocks{" "}
+          {settlement.blockNumber === null
+            ? "—"
+            : `${(settlement.blockNumber - 1n).toString()} and ${settlement.blockNumber.toString()}`}
+          .
+        </p>
+      ) : (
+        <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          {settlement.balanceNote}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function GrowClient() {
   const [principalInput, setPrincipalInput] = useState(DEFAULT_PRINCIPAL);
   const [inputError, setInputError] = useState<string | null>(null);
@@ -93,14 +215,23 @@ export function GrowClient() {
     snapshot,
     opportunity,
     source,
+    prepared,
     noOpportunityReason,
     expiredByTimeout,
     secondsRemaining,
+    chainId,
+    strategyHash,
+    strategyIsPlaceholder,
     scan,
     refresh,
     prepare,
     reset,
+    dispatch,
   } = useGrowFlow();
+
+  const { execute, resetExecution, settlement, mode, simulationNote } =
+    useGrowExecution(dispatch);
+  const { isConnected } = useAccount();
 
   const parsedPrincipal = useMemo(() => {
     try {
@@ -111,10 +242,23 @@ export function GrowClient() {
   }, [principalInput]);
 
   const scanning = snapshot.state === "SCANNING" || snapshot.state === "REFRESHING";
-  const statusMessage = STATUS_COPY[snapshot.state];
+  const running =
+    snapshot.state === "PREPARING_ROUTE" ||
+    snapshot.state === "SIMULATING" ||
+    snapshot.state === "EXECUTING";
+
+  // The generic copy, then the parts only the live run knows: who is
+  // broadcasting, and whether a receipt was actually read.
+  const statusMessage =
+    snapshot.state === "EXECUTING" && mode === "WALLET"
+      ? "No solver is configured, so confirm the prepared transaction in your wallet."
+      : snapshot.state === "CONFIRMED" && settlement?.receipt === "unverified"
+        ? "The cycle was broadcast, but no receipt could be read in this browser — treat it as submitted, not settled."
+        : STATUS_COPY[snapshot.state];
 
   const handleScan = () => {
     setExecutionNote(null);
+    resetExecution();
     if (parsedPrincipal === null) {
       setInputError(`Enter a valid WBTC amount with at most ${WBTC.decimals} decimals.`);
       return;
@@ -127,15 +271,32 @@ export function GrowClient() {
     void scan(parsedPrincipal);
   };
 
-  const handlePrepare = () => {
-    // Preparing would move the machine to SIMULATING, and nothing dispatches
-    // SIMULATION_SUCCESS/FAILURE until the Grow contracts and the backend
-    // route builder exist — leaving the user with no exit. Explain instead.
-    setExecutionNote(
-      source === "fixture"
-        ? "Preparing a route needs the live Vortex API and the Grow contracts (Phases 6–7). This opportunity came from fixtures, so there is nothing to sign yet."
-        : "This opportunity is live, but route preparation and the atomic cycle land with the Grow contracts (Phases 6–7). Nothing was signed or sent.",
-    );
+  /**
+   * Prepares the route on the API and then runs it: simulate the prepared
+   * transaction, ask the solver to broadcast it, and fall back to broadcasting
+   * it from the connected wallet when the API answers SOLVER_UNAVAILABLE.
+   *
+   * A fixture opportunity is the one case that cannot run: there is no session
+   * the route builder would recognise, so it says so instead of sending a
+   * doomed request.
+   */
+  const handlePrepare = async () => {
+    setExecutionNote(null);
+    resetExecution();
+    if (source === "fixture") {
+      setExecutionNote(
+        "This opportunity came from fixtures because the Vortex API is unreachable, so there is nothing to sign yet. Start the API against a chain where Vortex Grow is deployed to run the cycle for real.",
+      );
+      return;
+    }
+    const route = await prepare();
+    if (route === null) {
+      // Nothing executable came back. prepare() has already put the reason on
+      // screen (FAILED, with the API's own code) or the run was superseded, so
+      // adding a second explanation here would only contradict it.
+      return;
+    }
+    await execute(route);
   };
 
   return (
@@ -147,6 +308,26 @@ export function GrowClient() {
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}
+
+      {strategyIsPlaceholder ? (
+        <div
+          role="status"
+          className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+        >
+          <span className="font-medium text-amber-300">
+            Placeholder strategy hash.
+          </span>{" "}
+          Scans are sent for{" "}
+          <span className="font-mono text-xs">{truncateAddress(strategyHash)}</span>,
+          which exists only in this app — a live API answers{" "}
+          <span className="font-mono text-xs">STRATEGY_NOT_FOUND</span> for it. Set{" "}
+          <span className="font-mono text-xs">
+            NEXT_PUBLIC_DEMO_GROW_STRATEGY_HASH
+          </span>{" "}
+          to the seeded Grow strategy hash for this deployment to scan the real
+          one.
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <div className="space-y-4">
@@ -190,13 +371,20 @@ export function GrowClient() {
 
             <button
               type="submit"
-              disabled={scanning}
+              disabled={scanning || running}
               aria-busy={scanning}
               className="w-full rounded-lg bg-teal-500 px-4 py-3 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {scanning ? "Scanning…" : "Scan for opportunity"}
             </button>
           </form>
+
+          {isConnected ? null : (
+            <p className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-400">
+              Scanning works without a wallet. Connect one on chain {chainId} to
+              broadcast the cycle yourself when the API has no solver key.
+            </p>
+          )}
 
           <section
             aria-live="polite"
@@ -220,6 +408,12 @@ export function GrowClient() {
               <p className="text-sm text-zinc-300">{statusMessage}</p>
             )}
 
+            {simulationNote === null ? null : (
+              <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                {simulationNote}
+              </p>
+            )}
+
             {executionNote === null ? null : (
               <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
                 {executionNote}
@@ -227,25 +421,64 @@ export function GrowClient() {
             )}
 
             {snapshot.txHash === null ? null : (
-              <p className="mt-3 font-mono text-xs tabular-nums text-zinc-400">
+              <p className="mt-3 break-all font-mono text-xs tabular-nums text-zinc-400">
                 Transaction: {snapshot.txHash}
               </p>
             )}
 
+            {prepared === null ? null : (
+              <div className="mt-4">
+                {/* Only a live prepare ever reaches this state — the fixture
+                    fallback stops the flow — so the badge says so. */}
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <h3 className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">
+                    Prepared route
+                  </h3>
+                  <SourceBadge source="live" variant="response" />
+                </div>
+                <dl className="space-y-1 text-xs text-zinc-500">
+                  <div className="flex justify-between gap-3">
+                    <dt>Route hash</dt>
+                    <dd
+                      className="font-mono tabular-nums text-zinc-400"
+                      title={prepared.routeHash}
+                    >
+                      {truncateAddress(prepared.routeHash)}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>Gas estimate</dt>
+                    <dd className="font-mono tabular-nums text-zinc-400">
+                      {prepared.gasEstimate ?? "—"}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>Minimum final</dt>
+                    <dd className="font-mono tabular-nums text-zinc-400">
+                      {formatTokenAmount(BigInt(prepared.minFinalAsset), WBTC.decimals)} WBTC
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
             <div className="mt-4 flex flex-wrap gap-3">
-              {snapshot.state === "OPPORTUNITY_READY" ? (
+              {snapshot.state === "OPPORTUNITY_READY" || running ? (
                 <>
                   <button
                     type="button"
-                    onClick={handlePrepare}
-                    className="rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-teal-400"
+                    onClick={() => void handlePrepare()}
+                    disabled={running}
+                    aria-busy={running}
+                    className="rounded-lg bg-teal-500 px-4 py-2 text-sm font-medium text-zinc-950 transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    Prepare route
+                    {running ? "Running cycle…" : "Prepare route & run cycle"}
                   </button>
                   <button
                     type="button"
                     onClick={() => void refresh()}
-                    className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600"
+                    disabled={running}
+                    className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Refresh
                   </button>
@@ -267,6 +500,7 @@ export function GrowClient() {
                   type="button"
                   onClick={() => {
                     setExecutionNote(null);
+                    resetExecution();
                     reset();
                   }}
                   className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-600"
@@ -279,6 +513,8 @@ export function GrowClient() {
         </div>
 
         <div className="space-y-6">
+          {settlement === null ? null : <SettlementPanel settlement={settlement} />}
+
           {opportunity === null || source === null ? (
             <div className="rounded-xl border border-dashed border-zinc-800 px-6 py-12 text-center text-sm text-zinc-500">
               No opportunity on screen. Scan to price a cycle against current

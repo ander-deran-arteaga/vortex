@@ -7,8 +7,9 @@ import { CoveragePanel } from "@/components/maker/coverage-panel";
 import { PageHeader } from "@/components/page-header";
 import { FixtureNotice, SourceBadge } from "@/components/source-badge";
 import { useConfig, useExecutions, useStrategyHealth } from "@/hooks/useVortexQueries";
-import { FIXTURE_GROW_STRATEGY_HASH, FIXTURE_STRATEGY_HASH } from "@/lib/api";
+import { ApiRequestError } from "@/lib/api";
 import { formatTokenAmount, truncateAddress } from "@/lib/format";
+import { STRATEGY_HASHES } from "@/lib/strategy-config";
 
 const KIND_LABEL: Record<ExecutionKind, string> = {
   BEST_EXECUTION_AQUA: "Vortex Swap · Aqua",
@@ -36,6 +37,17 @@ function formatAmount(value: string | null, address: string | null): string {
     return "—";
   }
   return formatTokenAmount(BigInt(value), decimals);
+}
+
+/**
+ * The API's own code in front of its message. `STRATEGY_NOT_FOUND` tells the
+ * operator the configured hash is wrong for this chain; a generic sentence
+ * would not.
+ */
+function describeError(error: Error): string {
+  return error instanceof ApiRequestError
+    ? `${error.code}: ${error.message}`
+    : error.message;
 }
 
 /** Aggregates are computed from the records themselves, never hardcoded. */
@@ -112,8 +124,12 @@ function Pill({ label, on }: { label: string; on: boolean }) {
 export function DashboardClient() {
   const config = useConfig();
   const executions = useExecutions();
-  const swapHealth = useStrategyHealth(FIXTURE_STRATEGY_HASH);
-  const growHealth = useStrategyHealth(FIXTURE_GROW_STRATEGY_HASH);
+  // The resolved hashes, so this reads the strategy the deployment actually
+  // shipped. Only the two known fixture hashes get a fixture fallback, so a
+  // real hash surfaces the API's own error below rather than a healthy maker
+  // that does not exist.
+  const swapHealth = useStrategyHealth(STRATEGY_HASHES.swap);
+  const growHealth = useStrategyHealth(STRATEGY_HASHES.grow);
 
   const records = executions.data?.data ?? [];
   const totals = aggregateGrow(records);
@@ -128,7 +144,7 @@ export function DashboardClient() {
     { label: "Vortex Swap strategy", error: swapHealth.error },
     { label: "Vortex Grow strategy", error: growHealth.error },
   ].flatMap(({ label, error }) =>
-    error instanceof Error ? [{ label, message: error.message }] : [],
+    error instanceof Error ? [{ label, message: describeError(error) }] : [],
   );
 
   return (

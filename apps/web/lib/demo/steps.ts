@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiRequest } from "@/lib/api/client";
 import { fetchConfig, fetchExchangeQuote, scanGrowOpportunity } from "@/lib/api/endpoints";
 import { ApiRequestError, ApiUnavailableError } from "@/lib/api/errors";
-import { FIXTURE_GROW_STRATEGY_HASH, FIXTURE_STRATEGY_HASH } from "@/lib/api/fixtures";
+import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import { WBTC, USDC } from "@vortex/shared";
 import type { DemoStepId, DemoStepOutcome } from "./demoMachine";
 
@@ -64,6 +64,32 @@ export interface DemoStepDefinition {
 const CONTRACTS_NOT_DEPLOYED =
   "No deployment is reported by GET /api/v1/config for this chain, so there is no contract to call. Run the fork deployment and restart the API.";
 
+/**
+ * The one thing that makes a quote failure actionable when the UI is still on
+ * a fixture hash: the strategy was never shipped, so the venue is unavailable
+ * rather than uncompetitive.
+ */
+const PLACEHOLDER_HASH_HINT =
+  " The UI is still on a placeholder strategy hash, which no deployment ever shipped — set NEXT_PUBLIC_DEMO_STRATEGY_HASH (and NEXT_PUBLIC_DEMO_GROW_STRATEGY_HASH) to the hashes the demo seeding produced.";
+
+/**
+ * The API's own error code, verbatim, in front of its message. A run that
+ * reports `AQUA_ORDER_UNAVAILABLE` tells a judge exactly which layer is
+ * missing; "Quote request failed" tells them nothing.
+ */
+function describeError(error: unknown, fallback: string): string {
+  if (error instanceof ApiRequestError) {
+    return `${error.code}: ${error.message}`;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
+/** Quote-shaped failures also name the placeholder hash when that is the cause. */
+function describeQuoteError(error: unknown, fallback: string): string {
+  const described = describeError(error, fallback);
+  return STRATEGY_HASHES.isPlaceholder ? `${described}${PLACEHOLDER_HASH_HINT}` : described;
+}
+
 export const DEMO_STEPS: DemoStepDefinition[] = [
   {
     id: "seed",
@@ -91,7 +117,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
         }
         return {
           kind: "failure",
-          reason: error instanceof Error ? error.message : "Seeding failed.",
+          reason: describeError(error, "Seeding failed."),
         };
       }
     },
@@ -166,7 +192,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
         const quote = await fetchExchangeQuote(
           {
             chainId: ctx.chainId,
-            strategyHash: FIXTURE_STRATEGY_HASH,
+            strategyHash: STRATEGY_HASHES.swap,
             tokenIn: WBTC.address,
             tokenOut: USDC.address,
             amountIn: "100000000",
@@ -187,7 +213,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
       } catch (error) {
         return {
           kind: "failure",
-          reason: error instanceof Error ? error.message : "Could not obtain a quote.",
+          reason: describeQuoteError(error, "Could not obtain a quote."),
         };
       }
 
@@ -219,7 +245,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
         }
         return {
           kind: "failure",
-          reason: error instanceof Error ? error.message : "The build failed.",
+          reason: describeError(error, "The build failed."),
         };
       }
     },
@@ -245,7 +271,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
         const result = await scanGrowOpportunity(
           {
             chainId: ctx.chainId,
-            strategyHash: FIXTURE_GROW_STRATEGY_HASH,
+            strategyHash: STRATEGY_HASHES.grow,
             principalAmount: "100000000",
             direction: "AUTO",
           },
@@ -288,7 +314,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
       } catch (error) {
         return {
           kind: "failure",
-          reason: error instanceof Error ? error.message : "Scan failed.",
+          reason: describeQuoteError(error, "Scan failed."),
         };
       }
     },
@@ -336,7 +362,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
         const result = await fetchExchangeQuote(
           {
             chainId: ctx.chainId,
-            strategyHash: FIXTURE_STRATEGY_HASH,
+            strategyHash: STRATEGY_HASHES.swap,
             tokenIn: WBTC.address,
             tokenOut: USDC.address,
             amountIn: "100000000",
@@ -371,7 +397,7 @@ export const DEMO_STEPS: DemoStepDefinition[] = [
       } catch (error) {
         return {
           kind: "failure",
-          reason: error instanceof Error ? error.message : "Quote request failed.",
+          reason: describeQuoteError(error, "Quote request failed."),
         };
       }
     },

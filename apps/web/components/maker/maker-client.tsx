@@ -12,13 +12,22 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { FixtureNotice } from "@/components/source-badge";
 import { useStrategyHealth } from "@/hooks/useVortexQueries";
-import { FIXTURE_GROW_STRATEGY_HASH, FIXTURE_STRATEGY_HASH } from "@/lib/api";
+import { ApiRequestError } from "@/lib/api";
 import { ERC20_APPROVE_ABI, asEvmAddress } from "@/lib/erc20";
 import { parseTokenAmount } from "@/lib/format";
+import { STRATEGY_HASHES } from "@/lib/strategy-config";
 
 const SUPPORTED_CHAIN_IDS = [42161, 31337];
 /** Aqua is not deployed from the UI; approvals target the address the API reports. */
 const SHIP_BLOCKED_NOTE = "Requires the Aqua strategy contracts — Phase 2/6";
+
+/** The API's own code in front of its message (STRATEGY_NOT_FOUND, …). */
+function describeError(error: unknown): string {
+  if (error instanceof ApiRequestError) {
+    return `${error.code}: ${error.message}`;
+  }
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 function useApproval() {
   const { writeContractAsync, isPending, error, reset } = useWriteContract();
@@ -44,8 +53,21 @@ export function MakerClient() {
   const { switchChain, isPending: switchPending } = useSwitchChain();
   const wrongChain = isConnected && chain !== undefined && !SUPPORTED_CHAIN_IDS.includes(chain.id);
 
-  const swapHealth = useStrategyHealth(FIXTURE_STRATEGY_HASH);
-  const growHealth = useStrategyHealth(FIXTURE_GROW_STRATEGY_HASH);
+  // The resolved hashes, not the fixtures: a real deployment must be read
+  // through the hash the demo seeding produced. `fetchStrategyHealth` only
+  // falls back to a fixture for the two known fixture hashes, so a real hash
+  // surfaces the API's own error instead of a fabricated healthy maker.
+  const swapHealth = useStrategyHealth(STRATEGY_HASHES.swap);
+  const growHealth = useStrategyHealth(STRATEGY_HASHES.grow);
+
+  // Those errors have no other home on this page — without this a failed read
+  // would render as two missing panels and no explanation.
+  const healthFailures: { label: string; message: string }[] = [
+    { label: "Vortex Swap strategy", error: swapHealth.error },
+    { label: "Vortex Grow strategy", error: growHealth.error },
+  ].flatMap(({ label, error }) =>
+    error instanceof Error ? [{ label, message: describeError(error) }] : [],
+  );
 
   const [swapForm, setSwapForm] = useState({
     wbtc: "1.00000000",
@@ -193,6 +215,25 @@ export function MakerClient() {
         <p className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {approvalNote}
         </p>
+      )}
+
+      {healthFailures.length === 0 ? null : (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200"
+        >
+          <p className="mb-1 font-medium text-red-300">
+            Coverage could not be read, so the panels below are missing rather
+            than empty.
+          </p>
+          <ul className="list-inside list-disc">
+            {healthFailures.map((failure) => (
+              <li key={failure.label}>
+                {failure.label}: {failure.message}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       {[

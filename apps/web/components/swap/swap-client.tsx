@@ -9,8 +9,9 @@ import { QuoteComparison } from "@/components/swap/quote-comparison";
 import { SwapForm } from "@/components/swap/swap-form";
 import { useSwapExecution } from "@/hooks/useSwapExecution";
 import { useSwapFlow } from "@/hooks/useSwapFlow";
-import { parseTokenAmount } from "@/lib/format";
+import { parseTokenAmount, truncateAddress } from "@/lib/format";
 import type { SwapState } from "@/lib/machines/swapMachine";
+import { STRATEGY_HASHES } from "@/lib/strategy-config";
 
 const SUPPORTED_CHAIN_IDS = [42161, 31337];
 
@@ -30,6 +31,45 @@ const STEP_COPY: Record<SwapState, string | null> = {
   EXPIRED: "This quote expired. Request a fresh one to continue.",
   FAILED: null,
 };
+
+/**
+ * Shown only when the live API rejected a quote AND we are still pointed at a
+ * placeholder strategy hash. That combination has exactly one cause worth
+ * telling the user about, so this turns an opaque `AQUA_ORDER_UNAVAILABLE`
+ * into a one-line fix. It never appears on a fixture-backed response —
+ * `FixtureNotice` already owns that case — nor while quotes are succeeding.
+ */
+function PlaceholderStrategyNotice() {
+  return (
+    <div
+      role="status"
+      className="mb-6 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
+    >
+      <p className="mb-2">
+        <span className="font-medium text-amber-300">
+          Placeholder strategy hash.
+        </span>{" "}
+        This page is quoting against{" "}
+        <span
+          className="font-mono tabular-nums"
+          title={STRATEGY_HASHES.swap}
+        >
+          {truncateAddress(STRATEGY_HASHES.swap)}
+        </span>
+        , a placeholder that exists only in this app&rsquo;s fixtures. No such
+        strategy was ever shipped on the chain this API serves, so it answers{" "}
+        <span className="font-mono">AQUA_ORDER_UNAVAILABLE</span> (or{" "}
+        <span className="font-mono">NO_VENUE_AVAILABLE</span>) instead of
+        pricing the trade. The comparison is unavailable, not unfavourable.
+      </p>
+      <p>
+        Set <span className="font-mono">NEXT_PUBLIC_DEMO_STRATEGY_HASH</span> to
+        the strategy hash the demo seeding actually produced, then restart the
+        web app so the value is rebuilt into the client.
+      </p>
+    </div>
+  );
+}
 
 export function SwapClient() {
   const [amountInput, setAmountInput] = useState("");
@@ -105,6 +145,16 @@ export function SwapClient() {
   const canExecute =
     snapshot.state === "QUOTE_READY" && !expired && isConnected && !wrongChain;
 
+  // The live API rejected the QUOTE itself (`quote === null` in FAILED rules
+  // out a failure further down the flow, where a quote did succeed), and we are
+  // still on a placeholder hash. A fixture-backed response can never satisfy
+  // this — `source` is "live" only when the API actually answered.
+  const showPlaceholderNotice =
+    STRATEGY_HASHES.isPlaceholder &&
+    source === "live" &&
+    quote === null &&
+    snapshot.state === "FAILED";
+
   return (
     <div className="mx-auto w-full max-w-6xl px-6 py-12">
       <PageHeader
@@ -114,6 +164,8 @@ export function SwapClient() {
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}
+
+      {showPlaceholderNotice ? <PlaceholderStrategyNotice /> : null}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
         <div className="space-y-4">
