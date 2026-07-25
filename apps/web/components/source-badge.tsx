@@ -1,17 +1,17 @@
 import type { DataSource } from "@/lib/api/source";
 
 /**
- * Two different questions, two different badges.
+ * Provenance, stated in type rather than in a tinted chip.
  *
- * `variant="data"` (default) labels the numbers beside it — this is the one
- * that satisfies §21, and it must sit in the same panel as the values it
- * describes. Provenance is per-venue: a single quote response routinely
- * carries a fixture Aqua leg next to a live Uniswap leg, so one badge for the
- * whole response would necessarily mislabel one of them.
+ * Two different questions, two different badges. `variant="data"` (default)
+ * labels the numbers beside it - this is the §21 requirement, and it must sit
+ * in the same panel as the values it describes, because a single response
+ * routinely carries a fixture Aqua leg next to a live Uniswap leg.
+ * `variant="response"` labels how the response itself arrived. It is context,
+ * never a substitute for per-venue labeling.
  *
- * `variant="response"` labels how the response itself arrived (the live API,
- * or the fixture fallback when the API is unreachable). It is context, never a
- * substitute for per-venue labeling.
+ * The wording is load-bearing and asserted by tests: do not reword "Live data"
+ * or "Fixture data" without updating them deliberately.
  */
 export function SourceBadge({
   source,
@@ -32,27 +32,23 @@ export function SourceBadge({
         ? "Live data"
         : "Fixture data";
 
-  if (live) {
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-0.5 text-xs font-medium text-teal-400 ${className}`}
-      >
-        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-teal-400" />
-        {label}
-      </span>
-    );
-  }
-
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-400 ${className}`}
+      className={`inline-flex items-center gap-1.5 text-xs ${live ? "text-say-2" : "text-warn"} ${className}`}
       title={
         variant === "response"
-          ? "The Vortex API was unreachable, so this whole response came from deterministic fixtures."
-          : "Simulated — these values come from deterministic fixtures, not from a real Aqua or Uniswap quote."
+          ? live
+            ? "This response came from the Vortex API."
+            : "The Vortex API was unreachable, so this whole response came from deterministic fixtures."
+          : live
+            ? "These values came from a real quote."
+            : "Simulated. These values come from deterministic fixtures, not from a real Aqua or Uniswap quote."
       }
     >
-      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+      <span
+        aria-hidden="true"
+        className={`inline-block size-[6px] rotate-45 ${live ? "bg-say-2" : "bg-warn"}`}
+      />
       {label}
     </span>
   );
@@ -63,12 +59,15 @@ export function FixtureNotice({ className = "" }: { className?: string }) {
   return (
     <div
       role="status"
-      className={`rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 ${className}`}
+      className={`panel-raised flex gap-3 p-4 text-sm leading-relaxed text-say-2 ${className}`}
     >
-      <span className="font-medium text-amber-300">Fixture data.</span> The
-      Vortex API is not reachable, so quotes, balances and executions on this
-      page are deterministic placeholders — not Aqua quotes, not Uniswap API
-      quotes, and not onchain state. Start the API to see live values.
+      <span aria-hidden="true" className="mt-[7px] inline-block size-[6px] shrink-0 rotate-45 bg-warn" />
+      <p>
+        <span className="text-warn">Simulated.</span> The Vortex API is not
+        reachable, so quotes, balances and executions on this page are fixture
+        data: deterministic placeholders, not Aqua quotes, not Uniswap API
+        quotes, and not onchain state. Start the API to see live values.
+      </p>
     </div>
   );
 }
