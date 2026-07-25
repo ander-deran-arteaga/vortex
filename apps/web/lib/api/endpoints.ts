@@ -6,6 +6,7 @@ import {
   zGrowPrepareResponse,
   zGrowScanResponse,
   zStrategyHealth,
+  zAquaBuildResponse,
   zUniswapBuildResponse,
   type ConfigResponse,
   type ExchangeQuoteRequest,
@@ -15,6 +16,7 @@ import {
   type GrowScanRequest,
   type GrowScanResponse,
   type StrategyHealth,
+  type AquaBuildResponse,
   type UniswapBuildRequest,
   type UniswapBuildResponse,
 } from "@vortex/shared";
@@ -89,6 +91,22 @@ export async function buildUniswapTransaction(
     method: "POST",
     body: request,
     schema: zUniswapBuildResponse,
+  });
+}
+
+/**
+ * Builds the Aqua + SwapVM transaction for a quote session. Like the Uniswap
+ * builder there is deliberately NO fixture fallback — a fabricated transaction
+ * must never reach a wallet — so this surfaces the API's own error instead
+ * (AQUA_EXECUTION_UNAVAILABLE, STRATEGY_NOT_EXECUTABLE, SESSION_*).
+ */
+export async function buildAquaTransaction(
+  quoteSessionId: string,
+): Promise<AquaBuildResponse> {
+  return apiRequest(API_ROUTES.transactionsAqua, {
+    method: "POST",
+    body: { quoteSessionId },
+    schema: zAquaBuildResponse,
   });
 }
 

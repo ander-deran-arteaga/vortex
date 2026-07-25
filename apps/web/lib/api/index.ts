@@ -5,6 +5,7 @@ export {
   ApiUnavailableError,
 } from "./errors";
 export {
+  buildAquaTransaction,
   buildUniswapTransaction,
   fetchConfig,
   fetchExchangeQuote,

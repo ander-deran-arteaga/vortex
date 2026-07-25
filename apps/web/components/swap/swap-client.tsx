@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { FixtureNotice } from "@/components/source-badge";
 import { QuoteComparison } from "@/components/swap/quote-comparison";
 import { SwapForm } from "@/components/swap/swap-form";
+import { useSwapExecution } from "@/hooks/useSwapExecution";
 import { useSwapFlow } from "@/hooks/useSwapFlow";
 import { parseTokenAmount } from "@/lib/format";
 import type { SwapState } from "@/lib/machines/swapMachine";
@@ -36,8 +37,17 @@ export function SwapClient() {
   const [inputError, setInputError] = useState<string | null>(null);
   const [executionNote, setExecutionNote] = useState<string | null>(null);
 
-  const { snapshot, quote, source, secondsRemaining, requestQuote, proceed, reset } =
-    useSwapFlow();
+  const {
+    snapshot,
+    quote,
+    source,
+    secondsRemaining,
+    requestQuote,
+    proceed,
+    reset,
+    dispatch,
+  } = useSwapFlow();
+  const { execute, approve, approvalNeed } = useSwapExecution(dispatch);
   const { address, chain, isConnected } = useAccount();
   const { switchChain, isPending: switchPending } = useSwitchChain();
 
@@ -76,17 +86,20 @@ export function SwapClient() {
   };
 
   const handleExecute = () => {
-    // Nothing here may imply a swap happened, and the flow must not advance
-    // into a state nothing can service. The transaction builder
-    // (buildUniswapTransaction) and the Aqua settlement path both land with
-    // the backend comparison router, so until then this explains rather than
-    // dispatching — otherwise the machine parks in BUILDING_TRANSACTION with
-    // no exit and the page needs a reload.
-    setExecutionNote(
-      source === "fixture"
-        ? "Execution needs the live Vortex API — this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real."
-        : "This quote is live, but the execution path is not wired up yet: building and broadcasting the winning venue's transaction lands with the backend transaction builder. Nothing was signed or sent.",
-    );
+    // A fixture quote has no session the builder would recognise, so there is
+    // nothing to sign — say so rather than sending a doomed request.
+    if (source === "fixture") {
+      setExecutionNote(
+        "Execution needs the live Vortex API — this quote came from fixtures, so there is no transaction to sign. Start the API to execute for real.",
+      );
+      return;
+    }
+    if (quote === null || address === undefined || parsedAmount === null) {
+      return;
+    }
+    setExecutionNote(null);
+    proceed();
+    void execute(quote, address, parsedAmount);
   };
 
   const canExecute =
@@ -183,6 +196,22 @@ export function SwapClient() {
               <p className="mb-4 font-mono text-xs tabular-nums text-zinc-400">
                 Transaction: {snapshot.txHash}
               </p>
+            )}
+
+            {approvalNeed === null ? null : (
+              <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                <p className="mb-2">
+                  The router needs an allowance for this trade before it can
+                  settle.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void approve()}
+                  className="rounded-lg border border-amber-500/50 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-500/10"
+                >
+                  Approve WBTC
+                </button>
+              </div>
             )}
 
             {executionNote === null ? null : (
