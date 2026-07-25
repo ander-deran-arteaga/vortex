@@ -23,6 +23,7 @@ apps/api/data/
 
 # agent coordination (supervised by master-agent, never committed)
 coordination/
+.agents/
 
 # misc
 .DS_Store
