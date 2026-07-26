@@ -11,12 +11,14 @@ const DEFAULT_DEPLOYMENTS_DIR = new URL(
 export function loadDeployment(
   chainId: number,
   deploymentsDir: URL = DEFAULT_DEPLOYMENTS_DIR,
+  variant: "default" | "fork" = "default",
 ): DeploymentFile {
-  const url = new URL(`${chainId}.json`, deploymentsDir);
+  const suffix = variant === "fork" ? ".fork" : "";
+  const url = new URL(`${chainId}${suffix}.json`, deploymentsDir);
   const parsed = JSON.parse(readFileSync(url, "utf8")) as DeploymentFile;
   if (parsed.chainId !== chainId) {
     throw new Error(
-      `deployments/${chainId}.json declares chainId ${parsed.chainId}`,
+      `deployments/${chainId}${suffix}.json declares chainId ${parsed.chainId}`,
     );
   }
   return parsed;

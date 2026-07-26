@@ -34,8 +34,13 @@ export function chainForId(chainId: number): Chain {
   return chain;
 }
 
-/** 31337 reads the local fork; 42161 reads the configured Arbitrum RPC. */
+/**
+ * 31337 reads the local fork; 42161 reads the configured Arbitrum RPC — unless
+ * DEPLOYMENT_VARIANT is "fork", which means Vortex is deployed on a LOCAL fork
+ * that reports chain id 42161, so the local node is the right endpoint.
+ */
 export function rpcUrlForChain(env: Env): string {
+  if (env.DEPLOYMENT_VARIANT === "fork") return env.FORK_RPC_URL;
   return env.CHAIN_ID === anvilFork.id ? env.FORK_RPC_URL : env.RPC_URL;
 }
 

@@ -23,8 +23,15 @@ const zEnv = z.object({
   SOLVER_PRIVATE_KEY: z.string().optional(),
   STORE_DIR: z.string().default("./data"),
   /**
-   * Which deterministic Aqua fixture the comparison uses until blockend's live
-   * strategy is wired. Lets the demo show either venue winning on demand.
+   * Which deployment artifacts to read. "fork" selects
+   * `<chainId>.fork.json` / `<chainId>.fork.demo.json` — the Arbitrum One
+   * fork where Vortex is deployed alongside REAL WBTC/USDC, which is the only
+   * configuration where both venues can quote the same chain.
+   */
+  DEPLOYMENT_VARIANT: z.enum(["default", "fork"]).default("default"),
+  /**
+   * Which deterministic Aqua fixture the comparison uses when no live strategy
+   * is deployed. Lets the demo show either venue winning on demand.
    */
   AQUA_FIXTURE_PROFILE: z
     .enum(["competitive", "uncompetitive", "stale"])

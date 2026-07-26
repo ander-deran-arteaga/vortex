@@ -124,10 +124,18 @@ export function buildContext(
           })
         : null;
 
-  const deployment = loadDeployment(env.CHAIN_ID);
+  const deployment = loadDeployment(
+    env.CHAIN_ID,
+    undefined,
+    env.DEPLOYMENT_VARIANT,
+  );
   const tokens = tokensForChain(env.CHAIN_ID, deployment);
   const resolveSymbol = makeSymbolResolver(tokens);
-  const strategy = loadAquaDemoStrategy(env.CHAIN_ID);
+  const strategy = loadAquaDemoStrategy(
+    env.CHAIN_ID,
+    undefined,
+    env.DEPLOYMENT_VARIANT,
+  );
   const routerAddress = deployment.contracts.AquaSwapVMRouter;
   const lensAddress = deployment.contracts.VortexAquaLens;
   const oracleAddress = deployment.contracts.MockReferenceOracle;

@@ -124,7 +124,7 @@ export async function runChainPreflight(
   const rpcUrl = rpcUrlForChain(ctx.env);
   const rpcChainId = await probeRpcChainId(rpcUrl);
   const chainsWithStrategies = [31337, 42161].filter(
-    (id) => loadAquaDemoStrategy(id) !== null,
+    (id) => loadAquaDemoStrategy(id, undefined, ctx.env.DEPLOYMENT_VARIANT) !== null,
   );
 
   return diagnoseChainConfiguration({

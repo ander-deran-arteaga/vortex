@@ -52,10 +52,12 @@ const DEFAULT_DEPLOYMENTS_DIR = new URL(
 export function loadAquaDemoStrategy(
   chainId: number,
   deploymentsDir: URL = DEFAULT_DEPLOYMENTS_DIR,
+  variant: "default" | "fork" = "default",
 ): AquaDemoStrategy | null {
   let raw: RawDemo;
   try {
-    const url = new URL(`${chainId}.demo.json`, deploymentsDir);
+    const suffix = variant === "fork" ? ".fork" : "";
+    const url = new URL(`${chainId}${suffix}.demo.json`, deploymentsDir);
     raw = JSON.parse(readFileSync(url, "utf8")) as RawDemo;
   } catch {
     // No seeded strategy on this chain. Not an error — 42161 has none.
