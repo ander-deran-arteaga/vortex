@@ -27,7 +27,7 @@ contract CheckDemoReady is Script {
     uint256 internal constant MAX_ORACLE_AGE = 1 hours;
     uint256 internal constant COMPETITIVE_MID_E18 = 100_000e18;
 
-    function run() external {
+    function run() external view {
         string memory deployment = vm.readFile(
             string.concat(
                 "../../deployments/",
@@ -76,7 +76,7 @@ contract CheckDemoReady is Script {
         if (failures == 0) console.log("  ok    core contracts deployed");
     }
 
-    function _checkOracle(string memory deployment) private returns (uint256 failures) {
+    function _checkOracle(string memory deployment) private view returns (uint256 failures) {
         IVortexReferenceOracle oracle =
             IVortexReferenceOracle(vm.parseJsonAddress(deployment, ".contracts.MockReferenceOracle"));
         IVortexReferenceOracle.PriceData memory p = oracle.latestPrice();
