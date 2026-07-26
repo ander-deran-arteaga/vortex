@@ -33,3 +33,6 @@ coordination/
 
 # misc
 .DS_Store
+
+# detached anvil logs from scripts/ensure-demo.sh
+.anvil-*.log

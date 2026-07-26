@@ -33,7 +33,7 @@ and never reaches the browser.
 
 | Port | Service | Started by |
 | --- | --- | --- |
-| **8545** | anvil, chain id 31337 | `scripts/bootstrap-fork.sh` |
+| **8545** | anvil, chain id 31337 | `scripts/ensure-demo.sh` |
 | **3001** | API | `pnpm --filter @vortex/api demo` |
 | **3000** | Web | `pnpm --filter @vortex/web dev` |
 
@@ -51,12 +51,29 @@ kill <pid>                 # kill that PID only
 ## 2. Start the chain (terminal 1)
 
 ```bash
-./scripts/bootstrap-fork.sh
+./scripts/ensure-demo.sh
 ```
 
-Deploys, in a fixed order that the committed addresses depend on: Aqua +
-SwapVM router + mock tokens + oracle, the seeded Vortex Swap strategy, the
-Vortex PermAMM v4 pool, and Vortex Grow. Leave it running.
+**One command, safe to run any number of times.** It works out what already
+exists and does only what is missing — starts anvil if nothing is listening,
+deploys the stack if the contracts are absent, ships the Swap and Grow Aqua
+strategies if they are not shipped, then runs the pre-flight and prints a
+summary. Re-running a healthy chain changes nothing and says so.
+
+It exists because deploying the contracts and shipping the strategies are
+**separate steps**, and a half-finished bring-up produces the worst symptom
+available: every contract address has bytecode, so the system looks fully
+deployed, while the API answers `STRATEGY_NOT_FOUND`. A strategy is Aqua
+*state*, not a contract. If you see that error, run this command — it will say
+`shipped by this run` and the chain will be healthy.
+
+The chain is left running in the background (log: `.anvil-8545.log`), so this
+terminal is free. Stop it **by PID** (`ss -ltnp "sport = :8545"`), never with a
+broad `pkill`.
+
+`scripts/bootstrap-fork.sh` still exists and does the same deployment in the
+foreground; use `ensure-demo.sh` unless you specifically want a blocking
+process. Fork mode: `FORK_RPC_URL=https://arb1.arbitrum.io/rpc ./scripts/ensure-demo.sh`.
 
 **Verify:**
 ```bash
@@ -302,7 +319,8 @@ profit, not that anything is broken.
 | `AQUA_EXECUTION_UNAVAILABLE` | API on chain 42161 | Use `pnpm --filter @vortex/api demo`; check `/health` says 31337 |
 | `/api/v1/config` shows 0 contracts | API on the wrong chain, or chain not bootstrapped | §2, then §3 |
 | Quote 503 `NO_VENUE_AVAILABLE` | Neither venue can price it | Expected on 31337 if the maker is also unavailable; check the oracle scenario |
-| `GROW_UNAVAILABLE` | Grow not deployed on this chain | Re-run `scripts/bootstrap-fork.sh` |
+| `GROW_UNAVAILABLE` | Grow not deployed on this chain | `./scripts/ensure-demo.sh` |
+| `STRATEGY_NOT_FOUND`, all contracts present | contracts deployed but the Aqua strategy was never shipped — deploy and ship are separate steps | `./scripts/ensure-demo.sh` (reports `shipped by this run`) |
 | Web 500 on a route that builds fine | Dev server compiled against moved files | Restart the web server (§5) |
 | Uniswap 429 | Rate limit (~6 req/s per key) | Wait; the client already paces and backs off |
 | A service vanished | Someone ran a broad `pkill` | Restart it; kill by PID only (§1) |
