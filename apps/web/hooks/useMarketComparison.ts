@@ -25,8 +25,8 @@ import { SIMULATED, simulatedSpreadBps } from "@/lib/market/simulated";
  * Neither feed can mask the other: each carries its own timestamp and its own
  * failure, and a feed that is down renders as absent rather than stale.
  */
-const BINANCE_POLL_MS = 4_000;
-const VORTEX_POLL_MS = 30_000;
+const BINANCE_POLL_MS = 1_500;
+const VORTEX_POLL_MS = 12_000;
 
 export interface MarketComparison {
   /** The rolling minute behind the timeline panel. */

@@ -180,20 +180,22 @@ export function MarketClient() {
       />
 
       {/*
-        Stated once, plainly, before any number is read. Vortex settles on a
-        local demo chain against a reference mark; Binance is the real market.
-        The comparison is of pricing behaviour, not of settled liquidity.
+        One line, not a paragraph. The full explanation lives in the tooltip and
+        in each simulated series' own badge — but the fact that Vortex here is a
+        model standing beside two measured books is stated before any number is
+        read, because that is what makes the chart honest rather than a claim.
       */}
-      <div className="panel-raised mb-8 flex gap-3 p-4">
-        <StatusMark tone="warn" className="mt-[7px] shrink-0" />
-        <p className="min-w-0 flex-1 text-sm leading-relaxed text-say-2">
-          Vortex runs on a local demo chain against a reference mark, so this
-          compares <span className="text-say-1">pricing behaviour</span>, not
-          settled liquidity. Binance is the real book. Absolute prices differ
-          between venues by construction, which is exactly why every figure here
-          is measured in basis points from the venue&rsquo;s own mid.
-        </p>
-      </div>
+      <p
+        className="mb-8 flex items-start gap-2 text-xs text-say-2"
+        title="Binance and Uniswap are measured live. The Vortex series is generated from a model of the designed curve — it is not a record of quotes the PermAMM returned. Every figure is in basis points from each venue's own mid, so venues at different absolute prices stay comparable."
+      >
+        <StatusMark tone="warn" className="mt-[5px] shrink-0" />
+        <span className="min-w-0">
+          Binance and Uniswap are live. Vortex is a{" "}
+          <span className="text-warn">model of the designed curve</span>, in bps
+          from each venue&rsquo;s own mid.
+        </span>
+      </p>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
         <div className="flex flex-wrap items-center gap-2">

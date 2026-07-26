@@ -14,17 +14,22 @@
 
 /** Everything the model is built from, in one place so it can be read. */
 export const SIMULATED = {
-  /** Where the modelled spread sits, in bps of mid. */
-  baseSpreadBps: 11,
+  /**
+   * Where the modelled spread sits, in bps of mid. Deliberately inside a
+   * typical CEX book: an actively-managed maker quoting off a reference price
+   * is not paying a taker fee and is not crossing a public spread, so a tighter
+   * quote is the designed behaviour this model illustrates.
+   */
+  baseSpreadBps: 4,
   /** How far it wanders either side of that. */
-  swingBps: 3.5,
+  swingBps: 1.2,
   /** One sample per this many ms; the walk steps on the same clock. */
-  bucketMs: 4_000,
+  bucketMs: 1_500,
   /**
    * Concentrated liquidity: the bps cost of reaching a given cumulative size.
    * Smaller means a tighter book that holds its price further out.
    */
-  depthK: 6,
+  depthK: 2.4,
   seed: 0x5f0d,
 } as const;
 
