@@ -1,5 +1,4 @@
 import { Layers, Lock, Radio, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { FalseChoice } from "@/components/marketing/false-choice";
 import { GrowFlowSection } from "@/components/marketing/grow-flow/grow-flow-section";
 import { PriceLeak } from "@/components/marketing/price-leak";
@@ -23,17 +22,6 @@ function Section({
     >
       {children}
     </section>
-  );
-}
-
-function LaunchApp({ className = "" }: { className?: string }) {
-  return (
-    <Link
-      href="/swap"
-      className={`cut-tr inline-block bg-cu px-6 py-3 pr-7 text-sm font-medium text-ink-0 transition-colors duration-150 hover:bg-cu-hi ${className}`}
-    >
-      Launch App
-    </Link>
   );
 }
 
@@ -122,15 +110,12 @@ export default function LandingPage() {
               floor are enforced onchain.
             </p>
 
-            <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-1">
-              <LaunchApp />
-              <a
-                href="#choice"
-                className="text-sm text-say-2 transition-colors duration-150 hover:text-cu"
-              >
-                See how it works
-              </a>
-            </div>
+            <a
+              href="#choice"
+              className="pt-1 text-sm text-say-2 transition-colors duration-150 hover:text-cu"
+            >
+              See how it works
+            </a>
           </div>
 
         </div>
@@ -336,7 +321,6 @@ export default function LandingPage() {
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
             Without handing pricing power to a centralized operator.
           </p>
-          <LaunchApp className="mt-9" />
         </div>
       </Section>
     </>
