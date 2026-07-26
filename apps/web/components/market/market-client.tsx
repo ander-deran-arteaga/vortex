@@ -9,7 +9,7 @@ import { Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
 import { useMarketComparison } from "@/hooks/useMarketComparison";
 import { binanceCurve, binanceSpreadAt } from "@/lib/market/binance";
 import type { CurvePoint } from "@/lib/market/model";
-import { tightestNow } from "@/lib/market/history";
+import { ONCHAIN_SERIES, tightestNow } from "@/lib/market/history";
 import { simulatedDepthBps } from "@/lib/market/simulated";
 import { SAMPLE_SIZES, SELECTABLE_SIZES } from "@/lib/market/vortex";
 import { formatTokenAmount } from "@/lib/format";
@@ -73,7 +73,11 @@ export function MarketClient() {
   const simulatedHalfSpread = modelledLatest?.bps ?? 11;
   const selected = vortex?.samples.find((s) => s.size === size) ?? null;
   const binance = book === null ? null : binanceSpreadAt(book, size);
-  const tightest = tightestNow(history, now);
+  // Overall tightest is nearly always Binance — a centralized book carries no
+  // gas, no block time and no settlement risk, so it wins by construction and
+  // the label teaches nothing. The comparison Vortex actually competes in is
+  // the onchain one, so that is what the chart highlights.
+  const tightest = tightestNow(history, now, ONCHAIN_SERIES);
 
   const rows: VenueRow[] = [
     {
@@ -257,7 +261,9 @@ export function MarketClient() {
                   style={{ background: s.stroke, opacity: s.simulated === true ? 0.75 : 1 }}
                 />
                 {s.name}
-                {tightest === s.key ? <span className="text-cu">tightest</span> : null}
+                {tightest === s.key ? (
+                  <span className="text-cu">tightest onchain</span>
+                ) : null}
               </span>
             ))}
           </div>

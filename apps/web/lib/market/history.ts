@@ -59,10 +59,15 @@ export function allPoints(history: SpreadHistory): SpreadPoint[] {
  * Only series with a point inside the window can win: a venue that stopped
  * answering thirty seconds ago is not the tightest, it is absent.
  */
-export function tightestNow(history: SpreadHistory, now: number): SeriesKey | null {
+export function tightestNow(
+  history: SpreadHistory,
+  now: number,
+  only?: readonly SeriesKey[],
+): SeriesKey | null {
   let best: SeriesKey | null = null;
   let bestBps = Number.POSITIVE_INFINITY;
   for (const key of Object.keys(history) as SeriesKey[]) {
+    if (only !== undefined && !only.includes(key)) continue;
     const points = history[key];
     const latest = points[points.length - 1];
     if (latest === undefined || now - latest.at > WINDOW_MS) {
@@ -75,3 +80,13 @@ export function tightestNow(history: SpreadHistory, now: number): SeriesKey | nu
   }
   return best;
 }
+
+/**
+ * The onchain venues, as their own comparison group.
+ *
+ * A centralized book quotes inside any onchain venue by construction — it
+ * carries no gas, no block time and no settlement risk — so "tightest overall"
+ * is almost always Binance and says nothing about the thing Vortex competes on.
+ * The question that matters is which venue is tightest *onchain*.
+ */
+export const ONCHAIN_SERIES: readonly SeriesKey[] = ["uniswap", "aqua", "permamm"];
