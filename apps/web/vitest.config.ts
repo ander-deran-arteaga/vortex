@@ -14,5 +14,13 @@ export default defineConfig({
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
+    /*
+      Sits above the 10s asyncUtilTimeout in tests/setup.ts so a slow async
+      assertion reports its own failure instead of being killed mid-wait by the
+      runner. Vitest's 5s default was below the async budget these tests need
+      when `pnpm test` runs four workspaces concurrently.
+    */
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

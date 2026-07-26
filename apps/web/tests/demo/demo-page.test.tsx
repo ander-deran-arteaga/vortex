@@ -56,9 +56,7 @@ describe("demo page", () => {
     await waitFor(
       () => {
         expect(screen.queryByRole("button", { name: /running/i })).toBeNull();
-      },
-      { timeout: 10_000 },
-    );
+      });
 
     // With the whole API down, the execution step reports the true reason —
     // there is no quote session to execute against — rather than guessing at
@@ -82,9 +80,7 @@ describe("demo page", () => {
     await waitFor(
       () => {
         expect(screen.getByText(/could not run/i)).toBeInTheDocument();
-      },
-      { timeout: 10_000 },
-    );
+      });
     expect(
       screen.getByText(/Nothing below was simulated to make the run look complete/i),
     ).toBeInTheDocument();
@@ -143,9 +139,7 @@ describe("demo page", () => {
         expect(
           screen.getAllByText("dd9ff18437ed048d4203a8a0b2bf02e4").length,
         ).toBeGreaterThan(0);
-      },
-      { timeout: 10_000 },
-    );
+      });
 
     // The evidence carries the Uniswap leg's own provenance, and that leg is
     // live even though the Aqua leg beside it is a fixture.
@@ -218,9 +212,7 @@ describe("demo page", () => {
         expect(
           screen.getByText(/AQUA_EXECUTION_UNAVAILABLE/),
         ).toBeInTheDocument();
-      },
-      { timeout: 10_000 },
-    );
+      });
     // It reports the deployment gap, not a stale "route not registered" guess.
     expect(
       screen.queryByText(/transactions\/aqua is not registered/),

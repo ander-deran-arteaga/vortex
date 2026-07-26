@@ -121,9 +121,7 @@ describe("swap execution against a live builder", () => {
 
     await quoteThenExecute();
 
-    await waitFor(() => {
-      expect(screen.getByText("Swap confirmed.")).toBeInTheDocument();
-    });
+    await screen.findByText("Swap confirmed.");
 
     // The browser must send exactly what the API built — never a reconstruction.
     expect(sendTransactionAsyncSpy).toHaveBeenCalledWith({

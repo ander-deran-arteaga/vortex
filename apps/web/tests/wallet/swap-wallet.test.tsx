@@ -45,9 +45,7 @@ describe("swap page wallet handling", () => {
     await user.type(screen.getByLabelText("Sell"), "1");
     await user.click(screen.getByRole("button", { name: /get best execution/i }));
 
-    await waitFor(() => {
-      expect(screen.getByLabelText("Aqua · SwapVM")).toBeInTheDocument();
-    });
+    await screen.findByLabelText("Aqua · SwapVM");
     expect(screen.getByRole("button", { name: /execute swap/i })).toBeDisabled();
   });
 
@@ -94,9 +92,7 @@ describe("swap page wallet handling", () => {
     await user.type(screen.getByLabelText("Sell"), "1");
     await user.click(screen.getByRole("button", { name: /get best execution/i }));
 
-    await waitFor(() => {
-      expect(screen.getByLabelText("Aqua · SwapVM")).toBeInTheDocument();
-    });
+    await screen.findByLabelText("Aqua · SwapVM");
     expect(screen.getByRole("button", { name: /execute swap/i })).toBeDisabled();
   });
 
