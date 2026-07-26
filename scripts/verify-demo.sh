@@ -52,6 +52,13 @@ stop_recorded() {
 
 stop_by_pid() {
   stop_recorded
+  # anvil is started detached by ensure-demo.sh and reparented to init, and
+  # killing the PID `ss` reports has proved intermittent. Target it by its exact
+  # command line instead. This is deliberately NOT the broad `pkill -f tsx` the
+  # runbook forbids — it names one process on one port, and a surviving chain
+  # makes the next "fresh" run silently not fresh.
+  pkill -9 -f "anvil --port 8545" 2>/dev/null
+  sleep 2
   for p in 3000 3001 8545; do
     local pid
     pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
