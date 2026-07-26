@@ -118,10 +118,10 @@ export default function LandingPage() {
             unconditional so the tone change always starts a line: letting it
             wrap naturally on mobile put "making, enforced" on one row and the
             colour shift landed mid-phrase. The lower clamp bound is sized so
-            the first line still fits the 360px floor without wrapping, and
+            the longer headline still fits one line at the 360px floor, and
             the viewport coefficient carries it up from there.
           */}
-          <h1 className="mt-6 text-[clamp(1.6rem,7.2vw,3.75rem)] leading-[1.06] text-say-1">
+          <h1 className="mt-6 text-[clamp(1.4rem,5.4vw,3.5rem)] leading-[1.06] text-say-1">
             Quote like a market maker.
             <br />
             <span className="text-say-2">Trust like a contract.</span>
