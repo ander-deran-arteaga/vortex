@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { GitHubMark, LinkedInMark } from "@/components/marketing/brand-icons";
 import type { ReactNode } from "react";
 import { LandingHeader } from "@/components/marketing/landing-header";
 import { VortexMark } from "@/components/ui/vortex-mark";
@@ -16,15 +16,30 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
 
       <footer className="mt-24 overflow-hidden">
         <div className="mx-auto w-full max-w-6xl px-6 sm:px-8">
-          <div className="flex flex-wrap items-center gap-x-10 gap-y-3 py-6 text-sm text-say-3">
-            <p>WBTC/USDC on Arbitrum One</p>
-            <p>Built on 1inch Aqua, SwapVM and Uniswap v4.</p>
-            <Link
-              href="/architecture"
-              className="text-say-2 transition-colors duration-150 hover:text-cu"
-            >
-              Read the architecture
-            </Link>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3 py-6 text-sm text-say-3">
+            <p>
+              Built by <span className="text-say-2">Ander Arteaga</span>
+            </p>
+            <div className="flex items-center gap-4">
+              <a
+                href="https://github.com/ander-deran-arteaga"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Ander Arteaga on GitHub"
+                className="text-say-3 transition-colors duration-150 hover:text-cu"
+              >
+                <GitHubMark className="size-[18px]" />
+              </a>
+              <a
+                href="https://www.linkedin.com/in/ander-arteaga/"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Ander Arteaga on LinkedIn"
+                className="text-say-3 transition-colors duration-150 hover:text-cu"
+              >
+                <LinkedInMark className="size-[18px]" />
+              </a>
+            </div>
           </div>
         </div>
 
