@@ -36,6 +36,14 @@ stop_by_pid() {
     local pid
     pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
     if [[ -n "$pid" ]]; then
+      # Kill the listener's whole process group, not just the listener. These
+      # services are pnpm -> tsx/next -> worker chains; killing only the socket
+      # holder leaves the parent alive to hold the port or respawn. Targeting
+      # the group by PGID is precise — it is still "this service and its own
+      # children", never the pattern-wide `pkill` the runbook forbids.
+      local pgid
+      pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+      [[ -n "$pgid" ]] && kill -TERM -- "-$pgid" 2>/dev/null
       kill "$pid" 2>/dev/null
       for _ in $(seq 1 15); do
         ss -ltn 2>/dev/null | grep -q ":$p " || break
@@ -43,7 +51,12 @@ stop_by_pid() {
       done
       if ss -ltn 2>/dev/null | grep -q ":$p "; then
         pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
-        [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null && sleep 2
+        if [[ -n "$pid" ]]; then
+          pgid=$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ')
+          [[ -n "$pgid" ]] && kill -9 -- "-$pgid" 2>/dev/null
+          kill -9 "$pid" 2>/dev/null
+          sleep 2
+        fi
       fi
       if ss -ltn 2>/dev/null | grep -q ":$p "; then
         echo "  WARNING: :$p is still held — a new server would silently move to another port"
