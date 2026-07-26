@@ -104,15 +104,20 @@ export default function LandingPage() {
             <span className="text-say-2">Trust like a contract.</span>
           </h1>
 
-          <div className="mt-10 flex flex-wrap items-start gap-x-14 gap-y-8">
-            <p className="max-w-md text-[15px] leading-relaxed text-say-2">
+          {/*
+            The supporting line and its one link share the headline's left
+            edge. With the CTA now living in the sticky header, a link floated
+            off to the right of the paragraph had nothing anchoring it and read
+            as stranded rather than placed.
+          */}
+          <div className="mt-10 max-w-md">
+            <p className="text-[15px] leading-relaxed text-say-2">
               Makers price actively. The spread, inventory limits and profit
               floor are enforced onchain.
             </p>
-
             <a
               href="#choice"
-              className="pt-1 text-sm text-say-2 transition-colors duration-150 hover:text-cu"
+              className="mt-6 inline-block text-sm text-cu transition-colors duration-150 hover:text-cu-hi"
             >
               See how it works
             </a>
