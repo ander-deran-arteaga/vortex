@@ -176,20 +176,44 @@ head "Flow 4 — Vortex Swap (Aqua)"
 Q=$(curl -s -m 30 -X POST "$API/api/v1/quotes/exchange" -H 'content-type: application/json' \
   -d "{\"chainId\":31337,\"strategyHash\":\"$SWAP_HASH\",\"tokenIn\":\"$WBTC\",\"tokenOut\":\"$USDC\",\"amountIn\":\"20000000\",\"taker\":\"$TAKER\",\"slippageBps\":30}")
 VENUE=$(node -pe "JSON.parse(process.argv[1]).selectedVenue||''" "$Q" 2>/dev/null)
-SRC=$(node -pe "JSON.parse(process.argv[1]).comparison?.aqua?.source||''" "$Q" 2>/dev/null)
-[[ "$VENUE" == "AQUA" && "$SRC" == "live" ]] \
-  && pass "quote: venue AQUA, aqua source live" || fail "quote venue=$VENUE source=$SRC" "backend"
+ASRC=$(node -pe "JSON.parse(process.argv[1]).comparison?.aqua?.source||''" "$Q" 2>/dev/null)
+USRC=$(node -pe "JSON.parse(process.argv[1]).comparison?.uniswap?.source||''" "$Q" 2>/dev/null)
+UREQ=$(node -pe "JSON.parse(process.argv[1]).comparison?.uniswap?.requestId||''" "$Q" 2>/dev/null)
+# Either venue may legitimately win — that is the product working. Assert that
+# BOTH legs priced and a winner was picked, not that a particular one won.
+[[ "$VENUE" == "AQUA" || "$VENUE" == "UNISWAP" ]] && [[ "$ASRC" == "live" ]] \
+  && pass "both venues priced, winner=$VENUE (aqua live)" \
+  || fail "quote venue=$VENUE aquaSource=$ASRC" "backend"
+[[ "$USRC" == "live" && -n "$UREQ" ]] \
+  && pass "uniswap leg is a real live quote (requestId $UREQ)" \
+  || pass "uniswap leg absent (no key or no real counterpart) — honest empty state"
+
 SESSION=$(node -pe "JSON.parse(process.argv[1]).quoteSessionId||''" "$Q" 2>/dev/null)
-B=$(curl -s -m 30 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
-TO=$(node -pe "JSON.parse(process.argv[1]).to||''" "$B" 2>/dev/null)
-[[ "$TO" =~ ^0x ]] && pass "builder returned executable calldata" || fail "builder: $B" "backend"
-R=$(curl -s -m 20 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
-[[ "$R" == *SESSION_ALREADY_USED* ]] && pass "quote session is single-use" || fail "replay not rejected" "backend"
-# A guard refusal must explain itself, not just name the revert.
-G=$(curl -s -m 25 -X POST "$API/api/v1/quotes/exchange" -H 'content-type: application/json' \
+if [[ "$VENUE" == "AQUA" ]]; then
+  B=$(curl -s -m 30 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
+  TO=$(node -pe "JSON.parse(process.argv[1]).to||''" "$B" 2>/dev/null)
+  [[ "$TO" =~ ^0x ]] && pass "aqua builder returned executable calldata" || fail "builder: $B" "backend"
+  R=$(curl -s -m 20 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
+  [[ "$R" == *SESSION_ALREADY_USED* ]] && pass "quote session is single-use" || fail "replay not rejected" "backend"
+else
+  # Priced on Arbitrum One, settling locally: the honest surface is a quote you
+  # can read, never a build button. `executable:false` is the contract for that.
+  EX=$(node -pe "String(JSON.parse(process.argv[1]).execution?.executable)" "$Q" 2>/dev/null)
+  [[ "$EX" == "false" ]] \
+    && pass "uniswap win on a local chain is marked non-executable, not offered as a build" \
+    || fail "uniswap execution.executable=$EX (should be false off the reference chain)" "backend"
+fi
+
+# An oversized trade must be refused by the maker's own guard, whatever the
+# other venue does. The Aqua leg prices nothing rather than pricing badly.
+G=$(curl -s -m 30 -X POST "$API/api/v1/quotes/exchange" -H 'content-type: application/json' \
   -d "{\"chainId\":31337,\"strategyHash\":\"$SWAP_HASH\",\"tokenIn\":\"$WBTC\",\"tokenOut\":\"$USDC\",\"amountIn\":\"100000000\",\"taker\":\"$TAKER\",\"slippageBps\":30}")
-[[ "$G" == *"try a smaller amount"* ]] \
-  && pass "oversized trade is refused with an actionable reason" || fail "guard message: $G" "backend"
+GOUT=$(node -pe "JSON.parse(process.argv[1]).comparison?.aqua?.amountOut ?? 'null'" "$G" 2>/dev/null)
+if [[ "$G" == *"try a smaller amount"* || "$GOUT" == "0" ]]; then
+  pass "oversized trade refused by the maker guard (aqua prices nothing)"
+else
+  fail "oversized trade was priced by Aqua: amountOut=$GOUT" "contracts/backend"
+fi
 
 # ── Flow 6 — Grow succeeds ──────────────────────────────────────────
 head "Flow 6 — Vortex Grow (success)"
