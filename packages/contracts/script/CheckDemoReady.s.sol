@@ -17,6 +17,10 @@ import { MockERC20 } from "../src/mocks/MockERC20.sol";
 ///      transaction of the demo reverts or the headline scene shows the maker
 ///      losing.
 ///
+///      It covers both products. A strategy is Aqua *state*, not a contract,
+///      so "every address has bytecode" is not readiness: Swap and Grow are
+///      shipped separately and either can be missing on a fully deployed chain.
+///
 ///      The oracle staleness check is the important one. Vortex Swap pricing
 ///      rejects an oracle older than `maxOracleAge` (1 hour). Anvil stamps each
 ///      new block with wall-clock time, so a chain that has been idle for over
@@ -26,6 +30,8 @@ import { MockERC20 } from "../src/mocks/MockERC20.sol";
 contract CheckDemoReady is Script {
     uint256 internal constant MAX_ORACLE_AGE = 1 hours;
     uint256 internal constant COMPETITIVE_MID_E18 = 100_000e18;
+    /// @dev Aqua marks a docked strategy with this token count.
+    uint8 internal constant DOCKED = 0xff;
 
     function run() external view {
         string memory deployment = vm.readFile(
@@ -47,6 +53,7 @@ contract CheckDemoReady is Script {
         failures += _checkContracts(deployment);
         failures += _checkOracle(deployment);
         failures += _checkStrategy(deployment, demo);
+        failures += _checkGrowStrategy(deployment);
 
         console.log("");
         if (failures == 0) {
@@ -157,5 +164,55 @@ contract CheckDemoReady is Script {
         } else {
             console.log("  ok    maker covers the quoted side");
         }
+    }
+
+    /// @dev Vortex Grow ships a **single** asset, so the balance must be read
+    ///      for the token the strategy itself names. Asking a single-asset
+    ///      strategy about a token pair makes Aqua revert
+    ///      `SafeBalancesForTokenNotInActiveStrategy`, which means "active, but
+    ///      does not hold that token" — a different fact from "no strategy".
+    ///      `rawBalances` returns rather than reverts, so it cannot be confused
+    ///      with a missing strategy at all.
+    function _checkGrowStrategy(string memory deployment) private view returns (uint256 failures) {
+        string memory path =
+            string.concat("../../deployments/", vm.toString(block.chainid), ".grow.json");
+        if (!vm.exists(path)) {
+            console.log("  note  no Grow artifact for chain %s - skipping Grow checks", block.chainid);
+            return 0;
+        }
+        string memory grow = vm.readFile(path);
+
+        IAqua aqua = IAqua(vm.parseJsonAddress(deployment, ".contracts.Aqua"));
+        address compounder = vm.parseJsonAddress(deployment, ".contracts.VortexCompounder");
+        address maker = vm.parseJsonAddress(grow, ".strategy.maker");
+        address asset = vm.parseJsonAddress(grow, ".strategy.asset");
+        bytes32 growHash = vm.parseJsonBytes32(grow, ".growStrategyHash");
+
+        (uint248 shippedAsset, uint8 tokensCount) = aqua.rawBalances(maker, compounder, growHash, asset);
+        if (tokensCount == DOCKED) {
+            console.log("  FAIL  Grow strategy is DOCKED - its hash is spent, Grow will not execute");
+            console.log("        fix: re-seed with a new salt, then ./scripts/ensure-demo.sh");
+            return 1;
+        }
+        if (tokensCount == 0 || shippedAsset == 0) {
+            // The Addendum 23 failure: every contract has bytecode, so the
+            // chain looks deployed, and only Grow's quotes fail.
+            console.log("  FAIL  Grow strategy was never shipped into Aqua");
+            console.log("        VortexCompounder is deployed, so the chain LOOKS ready; Grow");
+            console.log("        quotes will answer STRATEGY_NOT_FOUND until it is shipped");
+            console.log("        fix: ./scripts/ensure-demo.sh - it ships what is missing, safe to re-run");
+            return 1;
+        }
+        console.log("  ok    grow strategy shipped: %s sats of %s", shippedAsset, asset);
+
+        // Same rule as the swap side: virtual balances are not collateral.
+        uint256 wallet = MockERC20(asset).balanceOf(maker);
+        uint256 allowed = MockERC20(asset).allowance(maker, address(aqua));
+        if (wallet < shippedAsset || allowed < shippedAsset) {
+            console.log("  WARN  maker cannot cover the Grow position (wallet %s, allowance %s)", wallet, allowed);
+            console.log("        the compounding pull will revert rather than under-deliver");
+            return 1;
+        }
+        console.log("  ok    maker covers the Grow position");
     }
 }

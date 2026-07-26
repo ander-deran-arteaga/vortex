@@ -67,6 +67,13 @@ deployed, while the API answers `STRATEGY_NOT_FOUND`. A strategy is Aqua
 *state*, not a contract. If you see that error, run this command — it will say
 `shipped by this run` and the chain will be healthy.
 
+The last thing it runs is the read-only pre-flight
+(`packages/contracts/script/CheckDemoReady.s.sol`), which is the single source
+of truth for chain health: core contracts deployed, oracle fresh against **wall
+clock**, maker on the competitive baseline, and **both** the Swap and Grow
+strategies shipped, funded and covered. Run it on its own immediately before
+demoing — see `docs/cli-backup.md`.
+
 The chain is left running in the background (log: `.anvil-8545.log`), so this
 terminal is free. Stop it **by PID** (`ss -ltnp "sport = :8545"`), never with a
 broad `pkill`.

@@ -28,8 +28,8 @@ cd packages/contracts && forge script script/CheckDemoReady.s.sol --rpc-url $RPC
 ```
 
 Read-only, one second, and it **reverts** rather than reporting ready. It
-catches the two conditions that are otherwise silent — the chain looks perfectly
-healthy in both:
+catches the conditions that are otherwise silent — the chain looks perfectly
+healthy in every one of them:
 
 - **A stale oracle.** Vortex Swap pricing rejects an oracle older than one hour.
   Anvil stamps new blocks with wall-clock time, so an idle chain still *reads*
@@ -44,6 +44,15 @@ healthy in both:
   immediately before demoing, not the night before.**
 - **A maker left on the losing scenario**, which makes the headline
   best-execution scene show Aqua losing.
+- **A strategy that was never shipped into Aqua** — checked for Swap *and*
+  Grow, separately. A strategy is Aqua state, not a contract, so a chain can
+  have all 17 contracts deployed and still answer `STRATEGY_NOT_FOUND` for one
+  product. Grow is queried for the single asset the strategy names, because
+  asking a single-asset strategy about a token pair makes Aqua revert
+  `SafeBalancesForTokenNotInActiveStrategy` — that means "active, holds a
+  different token", not "no strategy". Remedy: `./scripts/ensure-demo.sh`.
+- **A docked strategy**, whose hash is spent: it needs a re-seed with a new
+  salt, and re-running the bring-up alone will not fix it.
 
 ## 0. Bring the whole system up (one command, from the repo root)
 
