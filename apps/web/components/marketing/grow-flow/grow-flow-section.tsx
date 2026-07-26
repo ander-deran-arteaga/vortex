@@ -11,7 +11,12 @@ import {
 } from "./grow-flow-machine";
 import { SCENARIOS, SCENARIO_ORDER, type ScenarioId } from "./scenario-data";
 
-const STEP_MS = 820;
+/**
+ * A step is readable, not brisk: at 1.55s a viewer can take in the caption and
+ * the balance change before the next one lands, so the eleven-step cycle runs
+ * around 18 seconds. Steps that declare a `holdMs` dwell longer still.
+ */
+const STEP_MS = 1550;
 
 /** Reads the media query once and keeps up if the user changes it mid-session. */
 function useReducedMotion(): boolean {
@@ -44,9 +49,9 @@ export function GrowFlowSection() {
     if (!state.playing || reducedMotion) {
       return;
     }
-    const id = setTimeout(() => dispatch({ type: "ADVANCE" }), STEP_MS);
+    const id = setTimeout(() => dispatch({ type: "ADVANCE" }), step.holdMs ?? STEP_MS);
     return () => clearTimeout(id);
-  }, [state.playing, state.stepIndex, state.scenario, reducedMotion]);
+  }, [state.playing, state.stepIndex, state.scenario, reducedMotion, step.holdMs]);
 
   // Autoplay once when the section is meaningfully on screen. It never loops,
   // never steals focus and never scrolls.
@@ -96,6 +101,10 @@ export function GrowFlowSection() {
           <h3 className="text-[clamp(1.4rem,2.6vw,2rem)] leading-tight text-say-1">
             Start with WBTC. Finish with more WBTC.
           </h3>
+          <p className="mt-3 text-sm leading-relaxed text-say-2">
+            The backend proposes the route. The Compounder checks the final
+            balance onchain, or the whole transaction reverts.
+          </p>
           <p className="mt-3 text-[15px] text-cu">No profit, no execution.</p>
         </div>
 
@@ -159,44 +168,41 @@ export function GrowFlowSection() {
         />
       </div>
 
-      {/* One live region, updated in place, rather than eleven. */}
-      <p aria-live="polite" className="mt-4 min-h-[1.5rem] text-[15px] text-say-1">
-        {reducedMotion ? null : step.caption}
-      </p>
+      {/*
+        One caption at a time, in a single live region updated in place. The
+        stacked list was noise beside the diagram; the active line is the whole
+        narrative while the animation runs.
+      */}
+      {reducedMotion ? null : (
+        <div className="mt-4 flex items-baseline gap-3">
+          <span className="num text-xs text-cu">
+            {String(effectiveIndex + 1).padStart(2, "0")}
+          </span>
+          <p aria-live="polite" className="min-h-[1.5rem] text-[15px] text-say-1">
+            {step.caption}
+          </p>
+        </div>
+      )}
 
       {/*
-        The captions are the accessible narrative, so they live in the DOM as an
-        ordered list whether or not the animation ever runs. Under reduced
-        motion this is the whole explanation, complete and static.
+        With motion off there is no sequence to watch, so the numbered captions
+        ARE the explanation. Removing them here would leave a reader who asked
+        for less motion, or anyone on a screen reader, with an unexplained
+        diagram — so the full list stays in exactly that case.
       */}
-      <ol className="mt-4 space-y-1.5">
-        {steps.map((s, index) => {
-          const isCurrent = !reducedMotion && index === effectiveIndex;
-          return (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => dispatch({ type: "GO_TO", stepIndex: index })}
-                aria-current={isCurrent ? "step" : undefined}
-                className={`flex w-full items-baseline gap-3 rounded-[3px] px-2 py-1 text-left text-sm transition-colors duration-150 ${
-                  isCurrent ? "text-say-1" : "text-say-2 hover:text-say-1"
-                }`}
-              >
-                <span className={`num text-xs ${isCurrent ? "text-cu" : "text-say-3"}`}>
-                  {String(index + 1).padStart(2, "0")}
-                </span>
-                <span className="leading-snug">{s.caption}</span>
-              </button>
+      {reducedMotion ? (
+        <ol className="mt-5 space-y-1.5">
+          {steps.map((s, index) => (
+            <li key={s.id} className="flex items-baseline gap-3 text-sm">
+              <span className="num text-xs text-say-3">
+                {String(index + 1).padStart(2, "0")}
+              </span>
+              <span className="leading-snug text-say-2">{s.caption}</span>
             </li>
-          );
-        })}
-      </ol>
+          ))}
+        </ol>
+      ) : null}
 
-      <p className="mt-5 max-w-2xl text-xs leading-relaxed text-say-3">
-        The backend discovers and simulates the opportunity. The Compounder verifies the
-        actual final balance onchain. If either leg fails or returns too little WBTC, the
-        entire transaction reverts and the maker&rsquo;s principal is untouched.
-      </p>
     </div>
   );
 }

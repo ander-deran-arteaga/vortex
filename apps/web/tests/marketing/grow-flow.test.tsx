@@ -174,14 +174,14 @@ describe("grow flow section", () => {
     expect(screen.getByText(/fee is cut from the profit/i)).toBeInTheDocument();
   });
 
-  it("exposes the captions as an ordered narrative with a single live region", () => {
+  it("shows one caption at a time, in a single live region", () => {
     mockReducedMotion(false);
     const { container } = render(<GrowFlowSection />);
-    // Each caption appears in the narrative list, and the active one also in
-    // the live region, so more than one match is correct.
-    for (const step of stepsFor("success")) {
-      expect(screen.getAllByText(step.caption).length).toBeGreaterThan(0);
-    }
+    const steps = stepsFor("success");
+    // Only the active caption is on screen while the animation runs; the
+    // stacked list was noise beside the diagram.
+    expect(screen.getByText(steps[0]!.caption)).toBeInTheDocument();
+    expect(screen.queryByText(steps[3]!.caption)).toBeNull();
     expect(container.querySelectorAll("[aria-live='polite']")).toHaveLength(1);
   });
 
@@ -207,17 +207,23 @@ describe("grow flow section", () => {
 
     await user.click(unprofitable);
     expect(unprofitable).toHaveAttribute("aria-selected", "true");
+    // Switching resets to step one of the newly selected scenario.
+    expect(screen.getAllByText(/Step 1 of 10/).length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/Atomic revert. Maker principal unchanged/i),
+      screen.getByText(stepsFor("unprofitable")[0]!.caption),
     ).toBeInTheDocument();
   });
 
-  it("lets a reader jump to any step without waiting for the animation", async () => {
-    mockReducedMotion(false);
-    const user = userEvent.setup();
-    render(<GrowFlowSection />);
-    const gross = screen.getByRole("button", { name: /Gross: 1.00300000 WBTC/ });
-    await user.click(gross);
-    expect(gross).toHaveAttribute("aria-current", "step");
+  it("dwells on the two steps that carry the argument", () => {
+    // The gate verifying and the fee separating are the moments a viewer must
+    // actually read, so they hold longer than the mechanical steps.
+    const success = stepsFor("success");
+    const gate = success.find((s) => s.id === "gate");
+    const fee = success.find((s) => s.id === "fee");
+    expect(gate?.holdMs).toBeGreaterThan(2000);
+    expect(fee?.holdMs).toBeGreaterThan(2000);
+    // The failure scenario holds on its gate too.
+    expect(stepsFor("unprofitable").find((s) => s.id === "gate-failed")?.holdMs)
+      .toBeGreaterThan(2000);
   });
 });

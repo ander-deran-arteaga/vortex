@@ -32,6 +32,12 @@ export interface FlowStep {
   /** USDC base units (6 decimals) held mid-cycle. */
   compounderUsdc?: string;
   status?: "pending" | "verified" | "failed";
+  /**
+   * How long this step holds, in ms. Steps that carry the argument — the gate
+   * verifying and the fee separating from profit — dwell longer than the
+   * mechanical ones, because those are the two a viewer must actually read.
+   */
+  holdMs?: number;
   /** The reversal steps replay the earlier paths backwards. */
   reversing?: boolean;
 }
@@ -130,6 +136,7 @@ const SUCCESS_STEPS: readonly FlowStep[] = [
   },
   {
     id: "gate",
+    holdMs: 3000,
     caption: "final ≥ principal + minimum profit. Verified onchain.",
     active: "gate",
     makerWbtc: "0",
@@ -138,6 +145,7 @@ const SUCCESS_STEPS: readonly FlowStep[] = [
   },
   {
     id: "fee",
+    holdMs: 3000,
     caption: "Performance fee: 20% of realised profit only.",
     active: "fee",
     makerWbtc: "0",
@@ -178,6 +186,7 @@ const UNPROFITABLE_STEPS: readonly FlowStep[] = [
   },
   {
     id: "gate-failed",
+    holdMs: 3000,
     caption: "1.00150000 < 1.00000000 + 0.00200000. The floor is not met.",
     active: "gate",
     makerWbtc: "0",
