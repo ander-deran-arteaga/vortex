@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# End-to-end demo verification, exactly the path a judge walks.
+#
+#   ./scripts/verify-demo.sh            verify against whatever is running
+#   FRESH=1 ./scripts/verify-demo.sh    stop everything, reset the chain, rebuild, then verify
+#
+# Exits non-zero on the first failed flow, and says which layer owns it.
+#
+# Why this exists: "the tests pass" and "the demo works" are different claims.
+# Every failure this catches was invisible to `pnpm test` — an API on the wrong
+# chain, a strategy deployed but never shipped, a dev server serving stale
+# routes. This walks the real HTTP and RPC surface instead.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+RPC=http://127.0.0.1:8545
+API=http://127.0.0.1:3001
+WEB=http://127.0.0.1:3000
+FAILED=0
+
+pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
+fail() { printf '  \033[31mFAIL\033[0m  %s\n        layer: %s\n' "$1" "$2"; FAILED=1; }
+head() { printf '\n\033[1m%s\033[0m\n' "$1"; }
+
+stop_by_pid() {
+  for p in 3000 3001 8545; do
+    local pid
+    pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null && echo "  stopped :$p (pid $pid)"
+  done
+  sleep 3
+}
+
+wait_for() { # url, seconds
+  for _ in $(seq 1 "$2"); do curl -s -o /dev/null -m 2 "$1" 2>/dev/null && return 0; sleep 2; done
+  return 1
+}
+
+if [[ "${FRESH:-0}" == "1" ]]; then
+  head "FRESH START — stopping services, resetting chain and build artifacts"
+  stop_by_pid
+  rm -rf apps/web/.next .anvil-8545.log
+  bash scripts/ensure-demo.sh >/tmp/verify-chain.log 2>&1
+  grep -q "READY" /tmp/verify-chain.log && echo "  chain READY" || { fail "chain bring-up" "contracts/deployment"; tail -5 /tmp/verify-chain.log; exit 1; }
+  nohup pnpm --filter @vortex/api demo  >/tmp/verify-api.log 2>&1 &
+  nohup pnpm --filter @vortex/web dev   >/tmp/verify-web.log 2>&1 &
+  wait_for "$API/api/v1/health" 45 || { fail "API never became ready" "backend"; exit 1; }
+  wait_for "$WEB/" 60            || { fail "web never became ready" "frontend"; exit 1; }
+fi
+
+SWAP_HASH=$(node -e "console.log(require('$ROOT/deployments/31337.demo.json').strategyHash)" 2>/dev/null)
+GROW_HASH=$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').growStrategyHash)" 2>/dev/null)
+WBTC=$(node -e "console.log(require('$ROOT/deployments/31337.json').contracts.MockWBTC)")
+USDC=$(node -e "console.log(require('$ROOT/deployments/31337.json').contracts.MockUSDC)")
+TAKER=0x90F79bf6EB2c4f870365E785982E1f101E93b906
+
+# ── Flow 1 — environment ────────────────────────────────────────────
+head "Flow 1 — environment"
+[[ "$(cast chain-id --rpc-url $RPC 2>/dev/null)" == "31337" ]] \
+  && pass "chain is 31337" || fail "chain id" "environment"
+H=$(curl -s -m 8 "$API/api/v1/health")
+[[ "$(node -pe "JSON.parse(process.argv[1]).chainId" "$H" 2>/dev/null)" == "31337" ]] \
+  && pass "API serves chain 31337" || fail "API chain ($H)" "backend"
+C=$(curl -s -m 8 "$API/api/v1/config")
+[[ "$(node -pe "Object.keys(JSON.parse(process.argv[1]).contracts).length" "$C" 2>/dev/null)" -ge 17 ]] \
+  && pass "API reports the deployed contracts" || fail "API config contracts" "backend"
+for p in / /swap /grow /maker; do
+  code=$(curl -s -o /dev/null -w '%{http_code}' -m 40 "$WEB$p")
+  [[ "$code" == "200" ]] && pass "web $p renders" || fail "web $p -> $code" "frontend"
+done
+[[ -z "$(git status --porcelain deployments/)" ]] \
+  && pass "no deployment artifact drift" || fail "deployments/ drifted" "deployment"
+
+# ── Flow 3 — maker state is real ────────────────────────────────────
+head "Flow 3 — maker onboarding state"
+for pair in "swap:$SWAP_HASH" "grow:$GROW_HASH"; do
+  name=${pair%%:*}; hash=${pair#*:}
+  S=$(curl -s -m 20 "$API/api/v1/strategies/$hash")
+  node -e '
+    const d=JSON.parse(process.argv[1]);
+    if(d.error){console.log("ERR "+d.error.code);process.exit(1)}
+    if(!d.active||!d.solvent){console.log("ERR inactive/insolvent");process.exit(1)}
+    for(const t of d.tokens){
+      const m=[t.virtualBalance,t.actualBalance,t.aquaAllowance].map(BigInt).reduce((a,b)=>a<b?a:b);
+      if(BigInt(t.executableBalance)!==m){console.log("ERR "+t.symbol+" executable != min");process.exit(1)}
+    }
+  ' "$S" >/tmp/vf.txt 2>&1 \
+    && pass "$name strategy active, executable == min(virtual, actual, allowance)" \
+    || fail "$name strategy: $(cat /tmp/vf.txt)" "backend/contracts"
+done
+
+# ── Flow 4 — Aqua wins, quote -> build -> settle ────────────────────
+head "Flow 4 — Vortex Swap (Aqua)"
+Q=$(curl -s -m 30 -X POST "$API/api/v1/quotes/exchange" -H 'content-type: application/json' \
+  -d "{\"chainId\":31337,\"strategyHash\":\"$SWAP_HASH\",\"tokenIn\":\"$WBTC\",\"tokenOut\":\"$USDC\",\"amountIn\":\"20000000\",\"taker\":\"$TAKER\",\"slippageBps\":30}")
+VENUE=$(node -pe "JSON.parse(process.argv[1]).selectedVenue||''" "$Q" 2>/dev/null)
+SRC=$(node -pe "JSON.parse(process.argv[1]).comparison?.aqua?.source||''" "$Q" 2>/dev/null)
+[[ "$VENUE" == "AQUA" && "$SRC" == "live" ]] \
+  && pass "quote: venue AQUA, aqua source live" || fail "quote venue=$VENUE source=$SRC" "backend"
+SESSION=$(node -pe "JSON.parse(process.argv[1]).quoteSessionId||''" "$Q" 2>/dev/null)
+B=$(curl -s -m 30 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
+TO=$(node -pe "JSON.parse(process.argv[1]).to||''" "$B" 2>/dev/null)
+[[ "$TO" =~ ^0x ]] && pass "builder returned executable calldata" || fail "builder: $B" "backend"
+R=$(curl -s -m 20 -X POST "$API/api/v1/transactions/aqua" -H 'content-type: application/json' -d "{\"quoteSessionId\":\"$SESSION\"}")
+[[ "$R" == *SESSION_ALREADY_USED* ]] && pass "quote session is single-use" || fail "replay not rejected" "backend"
+# A guard refusal must explain itself, not just name the revert.
+G=$(curl -s -m 25 -X POST "$API/api/v1/quotes/exchange" -H 'content-type: application/json' \
+  -d "{\"chainId\":31337,\"strategyHash\":\"$SWAP_HASH\",\"tokenIn\":\"$WBTC\",\"tokenOut\":\"$USDC\",\"amountIn\":\"100000000\",\"taker\":\"$TAKER\",\"slippageBps\":30}")
+[[ "$G" == *"try a smaller amount"* ]] \
+  && pass "oversized trade is refused with an actionable reason" || fail "guard message: $G" "backend"
+
+# ── Flow 6 — Grow succeeds ──────────────────────────────────────────
+head "Flow 6 — Vortex Grow (success)"
+VB=$(curl -s -m 15 "$API/api/v1/strategies/$GROW_HASH" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tokens[0].virtualBalance" 2>/dev/null)
+S=$(curl -s -m 30 -X POST "$API/api/v1/grow/scan" -H 'content-type: application/json' \
+  -d "{\"chainId\":31337,\"strategyHash\":\"$GROW_HASH\",\"principalAmount\":\"100000000\",\"direction\":\"AUTO\"}")
+OPP=$(node -pe "JSON.parse(process.argv[1]).opportunityId||''" "$S" 2>/dev/null)
+[[ -n "$OPP" ]] && pass "scan found an opportunity" || fail "scan: $S" "backend"
+curl -s -m 30 -X POST "$API/api/v1/grow/prepare" -H 'content-type: application/json' -d "{\"opportunityId\":\"$OPP\"}" >/tmp/vprep.json
+node -pe "JSON.parse(require('fs').readFileSync('/tmp/vprep.json','utf8')).to" >/dev/null 2>&1 \
+  && pass "route prepared" || fail "prepare: $(cat /tmp/vprep.json)" "backend"
+E=$(curl -s -m 120 -X POST "$API/api/v1/grow/execute" -H 'content-type: application/json' -d "{\"opportunityId\":\"$OPP\"}")
+TX=$(node -pe "JSON.parse(process.argv[1]).txHash||''" "$E" 2>/dev/null)
+[[ "$TX" =~ ^0x ]] && pass "cycle executed ($TX)" || fail "execute: $E" "backend/contracts"
+VA=$(curl -s -m 15 "$API/api/v1/strategies/$GROW_HASH" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tokens[0].virtualBalance" 2>/dev/null)
+[[ -n "$VB" && -n "$VA" && "$VA" -gt "$VB" ]] \
+  && pass "maker virtual WBTC grew ($VB -> $VA)" || fail "virtual balance did not grow ($VB -> $VA)" "contracts"
+
+# ── Flow 7 — Grow refuses an unprofitable cycle ─────────────────────
+head "Flow 7 — Vortex Grow (failure protection)"
+EXT=$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').externalTarget)")
+KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+BEFORE=$(curl -s -m 15 "$API/api/v1/strategies/$GROW_HASH" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tokens[0].virtualBalance")
+cast send "$EXT" 'setShortfall(uint256)' 5000000 --private-key $KEY --rpc-url $RPC >/dev/null 2>&1
+N=$(curl -s -m 30 -X POST "$API/api/v1/grow/scan" -H 'content-type: application/json' \
+  -d "{\"chainId\":31337,\"strategyHash\":\"$GROW_HASH\",\"principalAmount\":\"100000000\",\"direction\":\"AUTO\"}")
+[[ "$N" == *'"opportunityFound":false'* ]] \
+  && pass "unprofitable cycle reported as a clear no-op, not a trade" || fail "scan while unprofitable: $N" "backend"
+AFTER=$(curl -s -m 15 "$API/api/v1/strategies/$GROW_HASH" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tokens[0].virtualBalance")
+[[ "$BEFORE" == "$AFTER" ]] && pass "maker virtual balance untouched" || fail "balance moved on a failed cycle" "contracts"
+cast send "$EXT" 'setShortfall(uint256)' 0 --private-key $KEY --rpc-url $RPC >/dev/null 2>&1
+
+head "RESULT"
+if [[ "$FAILED" == "0" ]]; then printf '  \033[32mDEMO GREEN\033[0m — every flow passed\n\n'; else printf '  \033[31mDEMO NOT GREEN\033[0m\n\n'; fi
+exit "$FAILED"
