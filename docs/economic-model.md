@@ -44,10 +44,12 @@ venue states the exchange rate as a side effect of quoting. The multiplication
 is done before the division and rounds **up**, so gas is never understated for
 the venue being charged.
 
-When no Uniswap quote exists there is no rate, and both venues are charged
-zero gas. That overstates Aqua's net slightly — documented and pinned by test,
-because the alternative (a price feed) buys nothing when Aqua is the only
-venue that can fill anyway.
+When no Uniswap quote exists there is no rate to derive from, and Vortex has
+no ETH price feed of its own. Rather than invent a number, `estimatedGasUsd`
+is reported as **`null`** and the UI must say "gas not priced" — a displayed
+`0` would claim the venue is free to execute, which is a fabricated figure
+rather than a missing one. Net output is still ranked, but on a chain where
+only one venue can quote there is nothing to rank it against anyway.
 
 ### The tie-break rule
 

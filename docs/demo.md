@@ -209,17 +209,68 @@ Run the scenes in order 1 → 2 → **reset** → 3, or run Scene 3 before Scene
 > with `UNISWAP_UNAVAILABLE`. The **live** Uniswap-wins case is demonstrated
 > against Arbitrum One in §6.1. Do not claim otherwise.
 
-### 6.1 — Live Uniswap comparison (needs the API key, real Arbitrum)
+### 6.1 — Two live venues on one chain (the real best-execution proof)
+
+The strongest demo: Vortex deployed on an **Arbitrum One fork** alongside the
+**real** WBTC and USDC, so the Uniswap Trade API and our Aqua strategy quote
+the same assets on the same chain, and **both are executable**. Both legs
+report `source: "live"`.
 
 ```bash
-cd apps/api
-CHAIN_ID=42161 AQUA_FIXTURE_PROFILE=uncompetitive PORT=3995 pnpm start
-```
-Quote WBTC→USDC on 42161: `selectedVenue` is **UNISWAP**, beating the Aqua leg
-on net, with a real `requestId` in the response. The Aqua side here is
-labelled `source: "fixture"` — say so; it is simulated, and the UI badges it.
+# 1. Fork Arbitrum, keeping chain id 42161 so the Trade API will quote it
+anvil --fork-url <ARBITRUM_RPC> --port 8546 --chain-id 42161
 
-Stop this instance by PID when done; it is not part of the main demo.
+# 2. Deploy Vortex against the REAL tokens (not mocks)
+cd packages/contracts
+export WBTC_ADDRESS=0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f
+export USDC_ADDRESS=0xaf88d065e77c8cC2239327C5EDb3A432268e5831
+export WETH_ADDRESS=0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
+DEPLOY_OUT=42161.fork.json forge script script/DeployLocal.s.sol   --rpc-url http://127.0.0.1:8546 --private-key $DEPLOYER_KEY --broadcast
+
+# 3. Fund the maker — real tokens are NOT mintable, so impersonate holders
+#    (WBTC: Aave v3 aWBTC reserve; USDC: any large holder)
+cast rpc anvil_impersonateAccount 0x078f358208685046a11C85e8ad32895DED33A249 --rpc-url http://127.0.0.1:8546
+cast send $WBTC_ADDRESS 'transfer(address,uint256)'   0x70997970C51812dc3A010C7d01b50e0d17dc79C8 500000000   --from 0x078f358208685046a11C85e8ad32895DED33A249 --unlocked --rpc-url http://127.0.0.1:8546
+# ...and the same for USDC from a USDC holder.
+
+# 4. Seed the strategy WITHOUT minting
+USE_REAL_TOKENS=true DEPLOY_OUT=42161.fork.json forge script script/SeedDemo.s.sol   --rpc-url http://127.0.0.1:8546 --private-key $DEPLOYER_KEY --broadcast
+
+# 5. Point the API at the fork artifacts
+cd apps/api
+DEPLOYMENT_VARIANT=fork CHAIN_ID=42161 FORK_RPC_URL=http://127.0.0.1:8546   PORT=3991 pnpm start
+```
+
+`DEPLOYMENT_VARIANT=fork` reads `42161.fork.json` / `42161.fork.demo.json` and
+routes RPC to the local node even though the chain reports 42161. The seeded
+strategy hash is deterministic: `0xd85d02ac546e857d987154a9700785dcb9473a443572935a75c7dd96056f187b`.
+
+**⚠️ Set the oracle to the real market price first.** The deploy script marks
+WBTC at 100,000 USDC. Real WBTC is far from that, so Aqua would "win" purely
+by mispricing — which is not best execution, it is a broken oracle. Read the
+live Uniswap quote, then set the oracle to that price:
+
+```bash
+cast send <MockReferenceOracle from 42161.fork.json>   'setPrice(uint256,uint256,uint256)' <mid> <bid> <ask>   --private-key $DEPLOYER_KEY --rpc-url http://127.0.0.1:8546
+```
+
+With the oracle **at** market, Uniswap wins — Aqua's fee and higher gas make
+it the worse venue, and the router says so. Nudge the oracle ~0.5% in the
+maker's favour and Aqua wins. Both were captured on live data:
+
+```
+oracle AT market      selectedVenue UNISWAP  aqua net 3199034647  uni net 3203833341
+oracle +0.5%          selectedVenue AQUA     aqua net 3215029865  uni net 3203833621
+```
+
+Both legs `source: "live"`; the Uniswap side carries a real `requestId`.
+
+> The **local 31337 chain cannot do this** — its tokens are mocks at addresses
+> the Trade API has never seen, so only Aqua quotes there and the router falls
+> back with `UNISWAP_UNAVAILABLE`. Use this fork configuration for any
+> two-venue claim.
+
+Stop this instance by PID when done; it is not part of the §2–§4 demo.
 
 ### Scene 3 — Vortex Grow, a real compounding cycle
 
