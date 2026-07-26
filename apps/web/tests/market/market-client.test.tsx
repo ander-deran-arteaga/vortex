@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { renderApp } from "../render-app";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -133,9 +133,10 @@ describe("market comparison", () => {
     await renderMarket();
 
     // Binance's real mid and the demo venue's mid are thousands apart; both
-    // still land as a readable spread because of the normalisation.
+    // still land as a readable spread because of the normalisation. Scoped to
+    // the table: the venue names also appear in the timeline legend.
     await waitFor(() => {
-      expect(screen.getByText("Vortex Aqua")).toBeInTheDocument();
+      expect(within(screen.getByRole("table")).getByText("Vortex Aqua")).toBeInTheDocument();
     });
     await waitFor(
       () => {
@@ -152,8 +153,9 @@ describe("market comparison", () => {
     stubFetch({});
     await renderMarket();
 
-    expect(screen.getByText("Vortex PermAMM")).toBeInTheDocument();
-    expect(screen.getByText(/signed authorisation/i)).toBeInTheDocument();
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("Vortex PermAMM")).toBeInTheDocument();
+    expect(table.getByText(/signed authorisation/i)).toBeInTheDocument();
   });
 
   it("keeps Vortex rendering when Binance is unreachable, and never substitutes a number", async () => {
@@ -204,6 +206,58 @@ describe("market comparison", () => {
     const rows = await screen.findAllByText(/not answering|no venue priced|could not reach/i);
     expect(rows.length).toBeGreaterThan(0);
     expect(screen.queryByText(/fixture/i)).toBeNull();
+  });
+
+  // A fabricated series sitting unmarked beside two measured ones is the
+  // failure this panel is most able to cause, so the label is asserted by its
+  // exact words, visible without hover, in the panel rather than a footnote.
+  it("labels the simulated series unmistakably, without hover", async () => {
+    stubFetch({});
+    await renderMarket();
+
+    const badge = await screen.findByText(
+      /Simulated: illustrative model of the designed curve, not measured performance/i,
+    );
+    expect(badge).toBeInTheDocument();
+    // Not a title attribute or a footnote: real text inside the timeline panel.
+    const panel = badge.closest("section");
+    expect(panel).not.toBeNull();
+    expect((panel as HTMLElement).textContent).toMatch(/Spread over the last minute/);
+  });
+
+  it("draws the modelled series dashed and the measured ones solid", async () => {
+    stubFetch({});
+    await renderMarket();
+
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: /last sixty seconds/i })).toBeInTheDocument();
+    });
+    const chart = screen.getByRole("img", { name: /last sixty seconds/i });
+    const dashed = chart.querySelectorAll("path[stroke-dasharray]");
+    // Exactly one series is a model, so exactly one line may be dashed.
+    expect(dashed.length).toBe(1);
+  });
+
+  it("keeps the timeline rendering when both real feeds are down", async () => {
+    stubFetch({
+      binance: () => {
+        throw new TypeError("Failed to fetch");
+      },
+      quote: () => {
+        throw new TypeError("fetch failed");
+      },
+    });
+    await renderMarket();
+
+    // The modelled line runs off the clock, so the panel still draws — and it
+    // still says, in words, that this line is a model.
+    await waitFor(() => {
+      expect(screen.getByRole("img", { name: /last sixty seconds/i })).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText(/Simulated: illustrative model of the designed curve/i),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText(/failed to fetch/i).length).toBeGreaterThan(0);
   });
 
   it("offers only sizes the maker's cap accepts", async () => {

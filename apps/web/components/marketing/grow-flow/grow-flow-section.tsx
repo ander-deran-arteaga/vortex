@@ -101,8 +101,9 @@ export function GrowFlowSection() {
           <h3 className="text-[clamp(1.4rem,2.6vw,2rem)] leading-tight text-say-1">
             Start with WBTC. Finish with more WBTC.
           </h3>
+          
           <p className="mt-3 text-sm leading-relaxed text-say-2">
-            The backend proposes the route. The Compounder checks the final
+            SwapVM proposes the route. The Compounder checks the final
             balance onchain, or the whole transaction reverts.
           </p>
           <p className="mt-3 text-[15px] text-cu">No profit, no execution.</p>

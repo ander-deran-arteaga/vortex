@@ -2,15 +2,32 @@
 
 import { useMemo, useState } from "react";
 import { DepthCurve, type Series } from "@/components/market/depth-curve";
+import { SimulatedBadge } from "@/components/market/simulated-badge";
 import { SpreadTable, type VenueRow } from "@/components/market/spread-table";
+import { SpreadTimeline, type TimelineSeries } from "@/components/market/spread-timeline";
 import { Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
 import { useMarketComparison } from "@/hooks/useMarketComparison";
 import { binanceCurve, binanceSpreadAt } from "@/lib/market/binance";
 import type { CurvePoint } from "@/lib/market/model";
+import { tightestNow } from "@/lib/market/history";
+import { simulatedDepthBps } from "@/lib/market/simulated";
 import { SAMPLE_SIZES, SELECTABLE_SIZES } from "@/lib/market/vortex";
 import { formatTokenAmount } from "@/lib/format";
 
 const MAX_SIZE = SAMPLE_SIZES[SAMPLE_SIZES.length - 1] as bigint;
+
+/** Two measured venues, one measured slowly, and one openly modelled. */
+const TIMELINE_SERIES: TimelineSeries[] = [
+  { key: "binance", name: "Binance", stroke: "var(--color-say-2)" },
+  { key: "uniswap", name: "Uniswap", stroke: "var(--color-say-3)" },
+  { key: "aqua", name: "Vortex Aqua", stroke: "var(--color-cu)" },
+  {
+    key: "permamm",
+    name: "Vortex PermAMM",
+    stroke: "var(--color-warn)",
+    simulated: true,
+  },
+];
 
 function ago(timestamp: number, now: number): string {
   const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
@@ -46,13 +63,17 @@ function FeedStatus({
 
 export function MarketClient() {
   const [size, setSize] = useState<bigint>(SELECTABLE_SIZES[1] as bigint);
-  const { book, binanceError, vortex, vortexError, loading } = useMarketComparison();
+  const { history, book, binanceError, vortex, vortexError, loading } =
+    useMarketComparison(size);
 
   // One clock for both "x seconds ago" labels, ticking with the faster feed.
   const now = book?.fetchedAt ?? Date.now();
 
+  const modelledLatest = history.permamm[history.permamm.length - 1] ?? null;
+  const simulatedHalfSpread = modelledLatest?.bps ?? 11;
   const selected = vortex?.samples.find((s) => s.size === size) ?? null;
   const binance = book === null ? null : binanceSpreadAt(book, size);
+  const tightest = tightestNow(history, now);
 
   const rows: VenueRow[] = [
     {
@@ -129,8 +150,27 @@ export function MarketClient() {
         stroke: "var(--color-say-2)",
       });
     }
+
+    // The PermAMM cannot be quoted from a browser, so this is the designed
+    // curve drawn from the model: concentrated liquidity is cheap to touch near
+    // the mid and costs progressively more toward the edges. Dashed, badged,
+    // and never mistakable for the measured lines beside it.
+    const half = simulatedHalfSpread / 2;
+    const modelled: CurvePoint[] = SAMPLE_SIZES.flatMap((sampleSize) => {
+      const bps = simulatedDepthBps(sampleSize, MAX_SIZE, half);
+      return [
+        { size: sampleSize, bps: -bps, side: "bid" as const },
+        { size: sampleSize, bps, side: "ask" as const },
+      ];
+    });
+    out.push({
+      name: "Vortex PermAMM (simulated)",
+      points: modelled,
+      stroke: "var(--color-warn)",
+      dashed: true,
+    });
     return out;
-  }, [vortex, book]);
+  }, [vortex, book, simulatedHalfSpread]);
 
   return (
     <Page>
@@ -196,6 +236,37 @@ export function MarketClient() {
       </div>
 
       <div className="space-y-6">
+        <Panel
+          title="Spread over the last minute"
+          aside={<SimulatedBadge className="max-w-[22rem]" />}
+        >
+          <SpreadTimeline
+            history={history}
+            series={TIMELINE_SERIES}
+            tightest={tightest}
+            now={now}
+          />
+          <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+            {TIMELINE_SERIES.map((s) => (
+              <span key={s.key} className="flex items-center gap-2 text-say-2">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-0.5 w-5 rounded-full"
+                  style={{ background: s.stroke, opacity: s.simulated === true ? 0.75 : 1 }}
+                />
+                {s.name}
+                {tightest === s.key ? <span className="text-cu">tightest</span> : null}
+              </span>
+            ))}
+          </div>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-say-2">
+            Binance and Uniswap are the real readings already on this page, kept
+            for a minute. The PermAMM line is modelled: it prices only against a
+            signed authorisation, so no browser can measure it, and there is no
+            historical quote store to read it from.
+          </p>
+        </Panel>
+
         <Panel cut title="Spread by venue">
           <SpreadTable rows={rows} size={size} />
         </Panel>

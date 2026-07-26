@@ -6,10 +6,13 @@ import { resolveTokens } from "@/lib/tokens";
 import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import {
   BinanceUnavailableError,
+  binanceSpreadAt,
   fetchBinanceBook,
   type BinanceBook,
 } from "@/lib/market/binance";
 import { sampleVortex, type VortexSamples } from "@/lib/market/vortex";
+import { EMPTY_HISTORY, record, type SpreadHistory } from "@/lib/market/history";
+import { SIMULATED, simulatedSpreadBps } from "@/lib/market/simulated";
 
 /**
  * Two feeds on two clocks.
@@ -26,6 +29,8 @@ const BINANCE_POLL_MS = 4_000;
 const VORTEX_POLL_MS = 30_000;
 
 export interface MarketComparison {
+  /** The rolling minute behind the timeline panel. */
+  history: SpreadHistory;
   book: BinanceBook | null;
   binanceError: string | null;
   vortex: VortexSamples | null;
@@ -35,7 +40,8 @@ export interface MarketComparison {
   refresh: () => void;
 }
 
-export function useMarketComparison(): MarketComparison {
+export function useMarketComparison(historySize: bigint): MarketComparison {
+  const [history, setHistory] = useState<SpreadHistory>(EMPTY_HISTORY);
   const [book, setBook] = useState<BinanceBook | null>(null);
   const [binanceError, setBinanceError] = useState<string | null>(null);
   const [vortex, setVortex] = useState<VortexSamples | null>(null);
@@ -63,6 +69,12 @@ export function useMarketComparison(): MarketComparison {
         if (!cancelled) {
           setBook(next);
           setBinanceError(null);
+          const spread = binanceSpreadAt(next, historySize);
+          if (spread !== null) {
+            setHistory((h) =>
+              record(h, "binance", { at: next.fetchedAt, bps: spread.spreadBps }, next.fetchedAt),
+            );
+          }
         }
       } catch (error) {
         if (cancelled) {
@@ -104,6 +116,17 @@ export function useMarketComparison(): MarketComparison {
         if (!cancelled && pass === passRef.current) {
           setVortex(next);
           setVortexError(null);
+          const sample = next.samples.find((s) => s.size === historySize);
+          setHistory((h) => {
+            let out = h;
+            if (sample?.aqua != null) {
+              out = record(out, "aqua", { at: next.sampledAt, bps: sample.aqua.spreadBps }, next.sampledAt);
+            }
+            if (sample?.uniswap != null) {
+              out = record(out, "uniswap", { at: next.sampledAt, bps: sample.uniswap.spreadBps }, next.sampledAt);
+            }
+            return out;
+          });
         }
       } catch (error) {
         if (!cancelled && pass === passRef.current) {
@@ -127,7 +150,20 @@ export function useMarketComparison(): MarketComparison {
     };
   }, [chainId, wbtc, usdc, nonce]);
 
+  // The modelled series steps on its own bucket so the line stays live even
+  // when neither real feed is answering. It is a pure function of the clock, so
+  // a tab that slept redraws the same shape it would have drawn all along.
+  useEffect(() => {
+    const tick = () => {
+      const at = Math.floor(Date.now() / SIMULATED.bucketMs) * SIMULATED.bucketMs;
+      setHistory((h) => record(h, "permamm", { at, bps: simulatedSpreadBps(at) }, Date.now()));
+    };
+    tick();
+    const id = setInterval(tick, SIMULATED.bucketMs);
+    return () => clearInterval(id);
+  }, []);
+
   const refresh = useCallback(() => setNonce((n) => n + 1), []);
 
-  return { book, binanceError, vortex, vortexError, loading, refresh };
+  return { history, book, binanceError, vortex, vortexError, loading, refresh };
 }
