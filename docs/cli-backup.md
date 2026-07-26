@@ -63,8 +63,14 @@ bash scripts/bootstrap-fork.sh
 **If the demo chain is already running on 8545, skip this step** — the script
 refuses to start rather than redeploying on top of a live chain, and prints the
 PID holding the port. Re-bootstrapping would mint new addresses and strand the
-committed artifacts, the running API and any open session. Use
-`ANVIL_PORT=<other>` if you genuinely want a second chain alongside it.
+committed artifacts, the running API and any open session.
+
+If you genuinely want a second chain alongside it, give it **its own chain id**,
+not just its own port: `ANVIL_CHAIN_ID=31338 ANVIL_PORT=8662 ...`. A different
+port alone is not enough — `DeployPermAMM` and `DeployGrow` name their artifacts
+after `block.chainid`, so a second 31337 chain rewrites `deployments/31337*.json`
+with addresses that exist only on it. Both scripts now refuse the unsafe form.
+This is the safe way to test any deploy change; diff `deployments/` afterwards.
 
 Deploys, in a fixed order that the committed addresses depend on: official Aqua
 + AquaSwapVMRouter + tokens + oracle + the Vortex Swap stack; the seeded Vortex

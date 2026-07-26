@@ -28,6 +28,28 @@ USDC_WHALE="0x724dc807b04555b71ed48a6896b6F41593b8C637"
 DEMO_MAKER="0x70997970C51812dc3A010C7d01b50e0d17dc79C8"   # anvil #1
 DEMO_TAKER="0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"   # anvil #2
 
+# Refuse to start if something is already on the port. The chain-id probe below
+# cannot catch this case: another anvil on 31337 answers identically to ours, so
+# a squatted port would sail through and we would redeploy on top of a chain the
+# demo is already using — new addresses, stale committed artifacts, live session
+# broken. Fail before spawning anything.
+#
+# This runs BEFORE any "==> starting ..." banner on purpose: printing that first
+# and refusing afterwards reads, to anyone skimming or piping to `head`, like
+# the script proceeded.
+if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
+  echo "refusing to start: something is already listening on port $PORT." >&2
+  echo "  If that is the demo chain, it is already up — skip the bootstrap." >&2
+  # A different port alone is NOT enough: DeployPermAMM and DeployGrow name
+  # their artifacts after block.chainid, so a second 31337 chain rewrites the
+  # committed deployments/31337*.json with addresses that exist only there.
+  echo "  To run a second chain alongside it, give it its own chain id too:" >&2
+  echo "    ANVIL_CHAIN_ID=31338 ANVIL_PORT=<other> $0" >&2
+  echo "  Owner of the port (do not pkill by name):" >&2
+  ss -ltnp "sport = :$PORT" 2>/dev/null | tail -n +2 >&2
+  exit 1
+fi
+
 ANVIL_ARGS=(--port "$PORT")
 RETRIES=50
 if [[ -n "${FORK_RPC_URL:-}" ]]; then
@@ -60,25 +82,20 @@ if [[ -n "${FORK_RPC_URL:-}" ]]; then
   SEED_OUT="42161.fork.demo.json"
   RETRIES=600
 else
-  echo "==> starting plain anvil (chain id 31337, mock tokens, fully offline)"
-  ANVIL_ARGS+=(--chain-id 31337)
-  EXPECTED_CHAIN_ID=31337
-  DEPLOY_OUT="31337.json"
-  SEED_OUT="31337.demo.json"
-fi
-
-# Refuse to start if something is already on the port. The chain-id probe below
-# cannot catch this case: another anvil on 31337 answers identically to ours, so
-# a squatted port would sail through and we would redeploy on top of a chain the
-# demo is already using — new addresses, stale committed artifacts, live session
-# broken. Fail before spawning anything.
-if ss -ltn "sport = :$PORT" 2>/dev/null | grep -q ":$PORT"; then
-  echo "refusing to start: something is already listening on port $PORT." >&2
-  echo "  If that is the demo chain, it is already up — skip the bootstrap." >&2
-  echo "  To run a second chain alongside it: ANVIL_PORT=<other> $0" >&2
-  echo "  Owner of the port (do not pkill by name):" >&2
-  ss -ltnp "sport = :$PORT" 2>/dev/null | tail -n +2 >&2
-  exit 1
+  CHAIN_ID="${ANVIL_CHAIN_ID:-31337}"
+  if [[ "$PORT" != "8545" && "$CHAIN_ID" == "31337" ]]; then
+    echo "refusing: a second chain on port $PORT would still be chain 31337, and" >&2
+    echo "  DeployPermAMM/DeployGrow write deployments/31337*.json unconditionally," >&2
+    echo "  overwriting the committed demo addresses with ones that exist only here." >&2
+    echo "  Re-run with a distinct chain id:" >&2
+    echo "    ANVIL_CHAIN_ID=31338 ANVIL_PORT=$PORT $0" >&2
+    exit 1
+  fi
+  echo "==> starting plain anvil (chain id $CHAIN_ID, mock tokens, fully offline)"
+  ANVIL_ARGS+=(--chain-id "$CHAIN_ID")
+  EXPECTED_CHAIN_ID="$CHAIN_ID"
+  DEPLOY_OUT="${CHAIN_ID}.json"
+  SEED_OUT="${CHAIN_ID}.demo.json"
 fi
 
 anvil "${ANVIL_ARGS[@]}" &

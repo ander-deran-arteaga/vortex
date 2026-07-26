@@ -134,7 +134,7 @@ fi
 # ── 4. verdict ──────────────────────────────────────────────────────────────
 step "pre-flight"
 ( cd "$CONTRACTS" && forge script script/CheckDemoReady.s.sol --rpc-url "$RPC" 2>&1 ) \
-  | grep -aE "^  (ok|note|WARN|FAIL)|READY" | sed 's/^/  /'
+  | grep -aE "^ *(ok|note|WARN|FAIL) |READY" | sed 's/^ */  /'
 
 step "summary"
 say "chain      : $([[ $started_chain == 1 ]] && echo 'started by this run' || echo 'was already running') ($RPC)"
