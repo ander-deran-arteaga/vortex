@@ -1,9 +1,9 @@
 import type { GrowOpportunity } from "@vortex/shared";
-import { USDC, WBTC } from "@vortex/shared";
+import { WBTC } from "@vortex/shared";
 import { SourceBadge } from "@/components/source-badge";
 import { Panel, Rows, StatusMark } from "@/components/ui/primitives";
 import type { DataSource } from "@/lib/api/source";
-import { formatTokenAmount, truncateAddress } from "@/lib/format";
+import { formatTokenAmount } from "@/lib/format";
 
 const ROUTE_LABEL: Record<GrowOpportunity["direction"], string> = {
   VORTEX_THEN_EXTERNAL: "Vortex PermAMM → external venue",
@@ -14,33 +14,20 @@ function wbtc(value: bigint): string {
   return formatTokenAmount(value, WBTC.decimals);
 }
 
-function DetailRow({
-  label,
-  value,
-  title,
-}: {
-  label: string;
-  value: string;
-  title?: string;
-}) {
+function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-baseline justify-between gap-5 py-2.5">
       <dt className="text-sm leading-snug text-say-2">{label}</dt>
-      <dd
-        className="num shrink-0 whitespace-nowrap text-sm text-say-1"
-        title={title}
-      >
-        {value}
-      </dd>
+      <dd className="num shrink-0 whitespace-nowrap text-sm text-say-1">{value}</dd>
     </div>
   );
 }
 
 /**
- * The priced cycle. Three things decide whether it is worth running, so those
- * three carry the weight: which way round the legs go, how long the quote is
- * still good for, and the floor the contract will enforce. Everything else is
- * supporting detail and is set to read as such.
+ * The priced cycle. Three things decide whether it is worth running, so only
+ * those three are here: which way round the legs go, how long the quote is
+ * still good for, and the floor the contract will enforce. The rest of what the
+ * API returns would be reading material, not a decision.
  */
 export function OpportunityCard({
   opportunity,
@@ -109,28 +96,9 @@ export function OpportunityCard({
         <Rows>
           <DetailRow label="Principal" value={`${wbtc(principal)} WBTC`} />
           <DetailRow
-            label="Bridge amount"
-            value={`${formatTokenAmount(BigInt(opportunity.bridgeAmount), USDC.decimals, 2)} USDC`}
-          />
-          <DetailRow
             label="Expected final"
             value={`${wbtc(principal + grossProfit)} WBTC`}
           />
-          <DetailRow
-            label="Minimum maker profit"
-            value={`${wbtc(BigInt(opportunity.minimumProfit))} WBTC`}
-          />
-          <DetailRow
-            label="Performance fee"
-            value={`${wbtc(BigInt(opportunity.performanceFee))} WBTC`}
-          />
-          {opportunity.uniswap === undefined ? null : (
-            <DetailRow
-              label="Uniswap request ID"
-              value={truncateAddress(opportunity.uniswap.requestId)}
-              title={opportunity.uniswap.requestId}
-            />
-          )}
         </Rows>
       </div>
     </Panel>

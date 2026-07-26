@@ -26,7 +26,9 @@ function opportunityFor(principal: string): GrowOpportunity {
 }
 
 describe("opportunity card", () => {
-  it("renders WBTC amounts at 8 decimals and the bridge amount at 6", () => {
+  // The card carries only the figures that decide the run; the USDC bridge
+  // leg and the fee moved off it. WBTC is 8 decimals here and nowhere near 18.
+  it("renders WBTC amounts at 8 decimals", () => {
     const opportunity = opportunityFor("100000000");
     render(
       <OpportunityCard opportunity={opportunity} source="fixture" secondsRemaining={30} />,
@@ -38,8 +40,7 @@ describe("opportunity card", () => {
         `${formatTokenAmount(BigInt(opportunity.minFinalAsset), 8)} WBTC`,
       ),
     ).toBeInTheDocument();
-    // The bridge leg is USDC: 1e11 base units is 100,000.00, not 1,000.00000000.
-    expect(screen.getByText("100,000.00 USDC")).toBeInTheDocument();
+    expect(screen.queryByText(/bridge amount/i)).toBeNull();
   });
 
   it("names the cycle direction in Vortex terms", () => {
@@ -104,7 +105,10 @@ describe("profit breakdown", () => {
     expect(screen.getByText(/20\.00% of profit/)).toBeInTheDocument();
   });
 
-  it("says the fee comes only from realized profit", () => {
+  // The prose about the fee is gone from the page, so the waterfall row is now
+  // the only thing standing between this panel and implying the maker keeps
+  // 100% of profit. It has to state the share and the deduction.
+  it("discloses the share of profit the contract takes", () => {
     render(
       <ProfitBreakdown
         principal={100_000_000n}
@@ -113,7 +117,8 @@ describe("profit breakdown", () => {
         source="fixture"
       />,
     );
-    expect(screen.getByText(/only to realized profit/i)).toBeInTheDocument();
+    expect(screen.getByText(/fee \(20\.00% of profit\)/i)).toBeInTheDocument();
+    expect(screen.getByText("− 0.00060000 WBTC")).toBeInTheDocument();
   });
 });
 

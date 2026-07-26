@@ -61,11 +61,6 @@ function SharedRows({ leg, selected }: { leg: SharedLeg; selected: boolean }) {
   return (
     <dl className="divide-y divide-[rgba(255,238,222,0.05)]">
       <DetailRow label="Output" value={`${usdc(leg.amountOut)} USDC`} quiet={!selected} />
-      <DetailRow
-        label="Minimum output"
-        value={`${usdc(leg.minimumAmountOut)} USDC`}
-        quiet={!selected}
-      />
       {/*
         Gas is nullable in the shared schema: the API returns null when it has
         no estimate rather than a misleading zero. An em dash is the honest
@@ -190,52 +185,6 @@ function UnavailableCard({ title, subtitle }: { title: string; subtitle: string 
   );
 }
 
-function AquaDetailRows({ aqua }: { aqua: AquaComparison }) {
-  return (
-    <dl className="mt-4 divide-y divide-[rgba(255,238,222,0.05)]">
-      <DetailRow label="Safety fee" value={basisPointsToPercent(aqua.safetyFeeBps)} quiet />
-      <DetailRow
-        label="Commercial fee"
-        value={basisPointsToPercent(aqua.commercialFeeBps)}
-        quiet
-      />
-      <DetailRow
-        label="Inventory adjustment"
-        hint={aqua.inventoryAdjustmentBps < 0 ? "improves your price" : undefined}
-        value={
-          aqua.inventoryAdjustmentBps > 0
-            ? `+${basisPointsToPercent(aqua.inventoryAdjustmentBps)}`
-            : basisPointsToPercent(aqua.inventoryAdjustmentBps)
-        }
-        quiet
-      />
-      <DetailRow
-        label="Maker coverage"
-        value={basisPointsToPercent(aqua.makerCoverageBps)}
-        quiet
-      />
-    </dl>
-  );
-}
-
-function UniswapDetailRows({ uniswap }: { uniswap: UniswapComparison }) {
-  return (
-    <dl className="mt-4 divide-y divide-[rgba(255,238,222,0.05)]">
-      <div className="flex items-baseline justify-between gap-4 py-2">
-        <dt className="shrink-0 text-sm text-say-2">Request ID</dt>
-        <dd
-          className="num min-w-0 truncate text-sm text-say-2"
-          title={uniswap.requestId ?? undefined}
-        >
-          {uniswap.requestId === undefined
-            ? "none returned"
-            : truncateAddress(uniswap.requestId)}
-        </dd>
-      </div>
-    </dl>
-  );
-}
-
 export function QuoteComparison({
   quote,
   source,
@@ -306,7 +255,6 @@ export function QuoteComparison({
               leg={quote.comparison.aqua}
               selected={selection.winner === "AQUA"}
             />
-            <AquaDetailRows aqua={quote.comparison.aqua} />
           </VenueCard>
         )}
         {quote.comparison.uniswap === null ? (
@@ -322,7 +270,6 @@ export function QuoteComparison({
               leg={quote.comparison.uniswap}
               selected={selection.winner === "UNISWAP"}
             />
-            <UniswapDetailRows uniswap={quote.comparison.uniswap} />
           </VenueCard>
         )}
       </div>

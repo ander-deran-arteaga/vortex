@@ -40,9 +40,9 @@ function WaterfallRow({
 
 /**
  * The cycle has to come back larger than it left, and this is where that is
- * read: principal in, what the round trip made, what the fee took, and the one
- * figure the maker actually receives. The last of those is the hero — it is set
- * several steps above everything around it because it is the answer.
+ * read: principal in, what the round trip made, what the contract took, and the
+ * one figure the maker actually receives. The last of those is the hero — it is
+ * set several steps above everything around it because it is the answer.
  *
  * §21: this panel is its own surface, so it states its own provenance. A badge
  * on the sibling opportunity card does not cover these numbers.
@@ -75,7 +75,7 @@ export function ProfitBreakdown({
           direction="gain"
         />
         <WaterfallRow
-          label={`Performance fee (${basisPointsToPercent(breakdown.feeShareBps)} of profit)`}
+          label={`Fee (${basisPointsToPercent(breakdown.feeShareBps)} of profit)`}
           value={`− ${wbtc(breakdown.performanceFee)} WBTC`}
           direction="loss"
         />
@@ -87,15 +87,9 @@ export function ProfitBreakdown({
           {`${wbtc(breakdown.makerReturn)} WBTC`}
         </p>
         <p className="mt-3 text-xs leading-relaxed text-say-3">
-          Principal plus realized profit, after the fee.
+          Principal plus profit, after the fee above.
         </p>
       </div>
-
-      <p className="mt-5 text-sm leading-relaxed text-say-2">
-        The performance fee applies only to realized profit, never to principal.
-        If the cycle does not end with more WBTC than it started with, the whole
-        transaction reverts and no fee is taken.
-      </p>
     </Panel>
   );
 }
