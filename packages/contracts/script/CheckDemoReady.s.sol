@@ -4,6 +4,8 @@ pragma solidity 0.8.30;
 import { Script } from "forge-std/Script.sol";
 import { console } from "forge-std/console.sol";
 
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
 import { IVortexReferenceOracle } from "../src/interfaces/IVortexReferenceOracle.sol";
@@ -27,11 +29,28 @@ import { MockERC20 } from "../src/mocks/MockERC20.sol";
 ///      an hour still *reads* fresh — until the demo's first transaction mines
 ///      a block and every quote starts reverting `VortexStaleOracle`. Refresh
 ///      with `SetDemoScenario.s.sol`, which re-stamps the price.
+/// @dev Minimal view into PoolManager's transient-free storage. Declared here
+///      rather than imported so this script stays on 0.8.30 while v4-core's
+///      PoolManager.sol compiles under its own 0.8.26 profile.
+interface IExtsload {
+    function extsload(bytes32 slot) external view returns (bytes32);
+}
+
 contract CheckDemoReady is Script {
     uint256 internal constant MAX_ORACLE_AGE = 1 hours;
     uint256 internal constant COMPETITIVE_MID_E18 = 100_000e18;
     /// @dev Aqua marks a docked strategy with this token count.
     uint8 internal constant DOCKED = 0xff;
+    /// @dev v4-core PoolManager's `POOLS_SLOT`. A wrong value yields a nonsense
+    ///      price, which the sanity bound below rejects rather than reporting.
+    uint256 internal constant POOLS_SLOT = 6;
+    uint256 internal constant Q96 = 1 << 96;
+    /// @dev Grow arbitrages the PermAMM pool against the external venue, and
+    ///      every cycle moves the pool closer to it, so the edge is a consumable
+    ///      resource. Measured on this demo: 526 bps at deploy, ~57 bps consumed
+    ///      per cycle, and the scanner stops finding work around 75 bps. Warn
+    ///      with a couple of cycles still in hand rather than at the cliff.
+    uint256 internal constant MIN_GROW_EDGE_BPS = 150;
 
     function run() external view {
         string memory deployment = vm.readFile(
@@ -166,6 +185,60 @@ contract CheckDemoReady is Script {
         }
     }
 
+    /// @dev Vortex Grow's profit comes from the gap between the PermAMM pool and
+    ///      the external venue, and each cycle narrows it — the demo arbitrages
+    ///      away its own opportunity. Once the gap no longer clears the maker's
+    ///      `minProfitBps`, the scanner answers `CYCLE_NOT_PROFITABLE`, which is
+    ///      correct behaviour that looks exactly like a broken demo. Nothing
+    ///      else on the chain changes, so this is invisible without measuring.
+    function _checkGrowEdge(
+        string memory deployment,
+        string memory grow
+    )
+        private
+        view
+        returns (uint256 failures)
+    {
+        address poolManager = vm.parseJsonAddress(deployment, ".contracts.PoolManager");
+        bytes32 poolId = vm.parseJsonBytes32(deployment, ".permAmmPoolId");
+        address currency0 = vm.parseJsonAddress(deployment, ".permAmmPoolKey.currency0");
+        address currency1 = vm.parseJsonAddress(deployment, ".permAmmPoolKey.currency1");
+        uint256 externalWhole = vm.parseJsonUint(grow, ".externalVenuePriceWholeUsdc");
+
+        uint256 sqrtPriceX96 =
+            uint256(uint160(uint256(IExtsload(poolManager).extsload(_slot0Key(poolId)))));
+        if (sqrtPriceX96 == 0 || externalWhole == 0) {
+            console.log("  note  could not read the PermAMM pool price - skipping the Grow edge check");
+            return 0;
+        }
+
+        // currency1 per currency0, in raw units, e18-scaled.
+        uint256 priceE18 = Math.mulDiv(Math.mulDiv(sqrtPriceX96, sqrtPriceX96, Q96), 1e18, Q96);
+        uint8 dec0 = MockERC20(currency0).decimals();
+        uint8 dec1 = MockERC20(currency1).decimals();
+        if (priceE18 == 0 || dec1 < dec0) {
+            console.log("  note  unexpected pool orientation - skipping the Grow edge check");
+            return 0;
+        }
+        // Invert into whole quote units per whole base unit, e.g. USDC per WBTC.
+        uint256 poolWhole = Math.mulDiv(10 ** (dec1 - dec0), 1e18, priceE18);
+
+        uint256 diff = poolWhole > externalWhole ? poolWhole - externalWhole : externalWhole - poolWhole;
+        uint256 edgeBps = Math.mulDiv(diff, 10_000, externalWhole);
+        if (edgeBps < MIN_GROW_EDGE_BPS) {
+            console.log("  WARN  Grow's edge is nearly spent: pool %s vs venue %s (%s bps)", poolWhole, externalWhole, edgeBps);
+            console.log("        cycles have arbitraged the pool toward the venue, which is correct");
+            console.log("        behaviour - but the next scan will answer CYCLE_NOT_PROFITABLE");
+            console.log("        fix: FRESH=1 ./scripts/verify-demo.sh rebuilds the chain and the edge");
+            return 1;
+        }
+        console.log("  ok    grow edge %s bps (pool %s vs venue %s)", edgeBps, poolWhole, externalWhole);
+    }
+
+    function _slot0Key(bytes32 poolId) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(poolId, POOLS_SLOT));
+    }
+
     /// @dev Vortex Grow ships a **single** asset, so the balance must be read
     ///      for the token the strategy itself names. Asking a single-asset
     ///      strategy about a token pair makes Aqua revert
@@ -204,6 +277,7 @@ contract CheckDemoReady is Script {
             return 1;
         }
         console.log("  ok    grow strategy shipped: %s sats of %s", shippedAsset, asset);
+        failures += _checkGrowEdge(deployment, grow);
 
         // Same rule as the swap side: virtual balances are not collateral.
         uint256 wallet = MockERC20(asset).balanceOf(maker);

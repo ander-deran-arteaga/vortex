@@ -335,6 +335,27 @@ taken from realized profit only. `opportunityFound: false` is a normal,
 expected answer — it means no cycle currently clears the maker's minimum
 profit, not that anything is broken.
 
+### Grow's edge is a consumable resource — budget ~8 cycles
+
+The profit comes from the gap between the PermAMM pool and the external venue,
+and **every cycle narrows it**: the demo arbitrages away its own opportunity.
+Measured on this chain: **526 bps at deploy, ~57 bps consumed per cycle**, and
+the scanner stops finding work at roughly **75 bps**. So after eight or so
+cycles `scan` answers `CYCLE_NOT_PROFITABLE` — which is the compounder
+correctly refusing to trade, and looks exactly like a broken demo.
+
+Nothing else on the chain changes, so this is invisible unless measured. The
+pre-flight measures it and warns with a couple of cycles still in hand:
+
+```
+WARN  Grow's edge is nearly spent: pool 95721 vs venue 95000 (75 bps)
+      fix: FRESH=1 ./scripts/verify-demo.sh rebuilds the chain and the edge
+```
+
+**Practical rule: don't rehearse Grow more than a few times before a judged
+run, and rebuild with `FRESH=1` if you have.** A rebuild restores the pool to
+its 100,000 mark and the full 526 bps.
+
 ---
 
 ## 7. If something is wrong
