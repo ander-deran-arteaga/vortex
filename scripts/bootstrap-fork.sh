@@ -37,6 +37,11 @@ if [[ -n "${FORK_RPC_URL:-}" ]]; then
   # both venues price the same real assets and the comparison is genuine.
   echo "==> starting anvil as an Arbitrum One FORK (real chain id, real tokens)"
   ANVIL_ARGS+=(--fork-url "$FORK_RPC_URL")
+  # PIN the fork block. Forking at "latest" makes the run unreproducible: a
+  # later replay lands on different chain state and the evidence stops being
+  # checkable. The brief accepts a *pinned* fork as final proof, and a fork that
+  # is not pinned is not that. Override with FORK_BLOCK to move it deliberately.
+  ANVIL_ARGS+=(--fork-block-number "${FORK_BLOCK:-487730370}")
   EXPECTED_CHAIN_ID=42161
   # NOT "42161.json": that file is reserved for a genuine Arbitrum One
   # deployment. These addresses exist only on a local fork, and publishing them
