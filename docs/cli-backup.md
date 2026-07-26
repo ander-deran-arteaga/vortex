@@ -34,8 +34,14 @@ healthy in both:
 - **A stale oracle.** Vortex Swap pricing rejects an oracle older than one hour.
   Anvil stamps new blocks with wall-clock time, so an idle chain still *reads*
   fresh right up until the demo's first transaction mines a block — and then
-  every quote reverts `VortexStaleOracle`. Refresh with section 3's
+  every quote reverts `VortexStaleOracle`. The pre-flight therefore measures age
+  against **wall clock**, not the frozen `block.timestamp` of an idle chain; it
+  reports how far the chain clock is behind. Refresh with section 3's
   `SCENARIO=AQUA_WINS`, which re-stamps the price.
+
+  This bites in practice: a chain left idle overnight reads "0 s old" and is
+  four hours stale the instant anyone touches it. **Run the pre-flight
+  immediately before demoing, not the night before.**
 - **A maker left on the losing scenario**, which makes the headline
   best-execution scene show Aqua losing.
 
