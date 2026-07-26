@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import { WBTC } from "@vortex/shared";
+import { CycleDiagram } from "@/components/grow/cycle-diagram";
 import { OpportunityCard } from "@/components/grow/opportunity-card";
 import { ProfitBreakdown } from "@/components/grow/profit-breakdown";
 import { FixtureNotice, SourceBadge } from "@/components/source-badge";
@@ -35,58 +36,6 @@ const STATUS_COPY: Record<GrowState, string | null> = {
   CONFIRMED: "Cycle confirmed.",
   FAILED: null,
 };
-
-const INVARIANTS = [
-  {
-    name: "Atomic all-or-nothing",
-    detail:
-      "The entire cycle is a single transaction. If any leg fails, every leg unwinds.",
-  },
-  {
-    name: "Profit floor enforced onchain",
-    detail:
-      "The cycle succeeds only if the final WBTC balance exceeds the initial WBTC balance. Anything less reverts.",
-  },
-  {
-    name: "Fee only from realized profit",
-    detail:
-      "The performance fee is taken from realized profit, never from principal.",
-  },
-  {
-    name: "Principal stays accounted for",
-    detail:
-      "Principal never leaves custody mid-cycle unreturned: it is pulled and pushed back within the same transaction.",
-  },
-] as const;
-
-/**
- * The cycle, as a sequence rather than a stack of boxes joined by arrows. Each
- * step names the verb that moved value into it, who holds it, and what happens
- * there — three columns on one grid, so the whole route reads down a line.
- */
-const CYCLE_STEPS: ReadonlyArray<{
-  edge: string | null;
-  name: string;
-  detail: string;
-  accent?: boolean;
-}> = [
-  { edge: null, name: "Aqua maker", detail: "Custodies the WBTC principal" },
-  { edge: "pull", name: "Vortex Grow app", detail: "Orchestrates the atomic cycle" },
-  { edge: "leg 1", name: "Vortex PermAMM", detail: "WBTC → USDC" },
-  {
-    edge: "leg 2",
-    name: "External venue (Uniswap API route)",
-    detail: "USDC → WBTC",
-  },
-  {
-    edge: "check",
-    name: "Profit check",
-    detail: `final WBTC ${">"} initial WBTC or the whole transaction reverts`,
-    accent: true,
-  },
-  { edge: "fee", name: "Performance fee", detail: "Taken from realized profit only" },
-  { edge: "push", name: "Aqua maker", detail: "Principal + profit returned" },
-];
 
 type StepTone = "done" | "active" | "failed" | "pending";
 
@@ -699,43 +648,22 @@ export function GrowClient() {
           How the cycle works
         </summary>
 
-        {/* Wide on a phone, so it scrolls inside its own box rather than
-            dragging the page sideways. */}
-        <div className="mt-6 overflow-x-auto">
-          <ol className="divide-y divide-[rgba(255,238,222,0.05)]">
-            {CYCLE_STEPS.map((step, index) => (
-              <li
-                key={`${index}-${step.name}`}
-                className="grid grid-cols-1 gap-x-6 gap-y-1 py-3.5 sm:grid-cols-[4rem_minmax(0,14rem)_minmax(0,1fr)] sm:items-baseline"
-              >
-                <span className="text-xs text-cu">{step.edge ?? ""}</span>
-                <span className="flex items-baseline gap-2 text-sm text-say-1">
-                  {step.accent === true ? <StatusMark tone="accent" /> : null}
-                  {step.name}
-                </span>
-                <span
-                  className={`text-sm leading-relaxed ${
-                    step.accent === true ? "text-say-1" : "text-say-2"
-                  }`}
-                >
-                  {step.detail}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
+        <div className="mt-6 grid items-center gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-12">
+          <CycleDiagram />
 
-        <h3 className="mt-10 text-[15px] text-say-1">Invariants</h3>
-        <ul className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          {INVARIANTS.map((invariant) => (
-            <li key={invariant.name} className="panel-raised px-4 py-4">
-              <p className="text-sm text-say-1">{invariant.name}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-say-2">
-                {invariant.detail}
-              </p>
-            </li>
-          ))}
-        </ul>
+          <div className="max-w-md">
+            <p className="text-[15px] leading-relaxed text-say-2">
+              Vortex borrows the maker&rsquo;s WBTC, trades one leg here and one
+              on an external venue, and can only settle if the maker ends with
+              more WBTC than it started with. Otherwise the whole transaction
+              reverts and nothing moved.
+            </p>
+            <p className="mt-4 text-sm leading-relaxed text-say-3">
+              The contract keeps 20% of realised profit. Principal is never
+              touched.
+            </p>
+          </div>
+        </div>
       </details>
     </Page>
   );

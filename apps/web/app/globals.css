@@ -185,3 +185,18 @@
     }
   }
 }
+
+/*
+  One copper highlight travelling the Grow ring. The dash and the gap together
+  equal the circumference, so the cycle ends exactly where it began — and under
+  the reduced-motion rule above, which cuts every animation to a single 0.01ms
+  pass, it simply comes to rest at the top of the loop.
+*/
+@keyframes vortex-orbit {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -176;
+  }
+}
