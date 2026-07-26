@@ -27,7 +27,7 @@ contract CheckDemoReady is Script {
     uint256 internal constant MAX_ORACLE_AGE = 1 hours;
     uint256 internal constant COMPETITIVE_MID_E18 = 100_000e18;
 
-    function run() external view {
+    function run() external {
         string memory deployment = vm.readFile(
             string.concat(
                 "../../deployments/",
@@ -76,12 +76,26 @@ contract CheckDemoReady is Script {
         if (failures == 0) console.log("  ok    core contracts deployed");
     }
 
-    function _checkOracle(string memory deployment) private view returns (uint256 failures) {
+    function _checkOracle(string memory deployment) private returns (uint256 failures) {
         IVortexReferenceOracle oracle =
             IVortexReferenceOracle(vm.parseJsonAddress(deployment, ".contracts.MockReferenceOracle"));
         IVortexReferenceOracle.PriceData memory p = oracle.latestPrice();
 
-        uint256 age = block.timestamp - uint256(p.updatedAt);
+        // Measure against WALL CLOCK, not block.timestamp.
+        //
+        // On an idle chain `block.timestamp` is frozen at the last mined block,
+        // so an oracle set hours ago reads "0 s old" — and this check happily
+        // reported READY for a chain whose very next transaction would revert
+        // every quote. The next block stamps wall-clock time, so wall clock is
+        // what the demo will actually be judged against. This exact blind spot
+        // was live in this file: chain 4419 s behind real time, oracle reported
+        // fresh, and the first demo transaction would have gone stale.
+        uint256 wallNow = vm.unixTime() / 1000;
+        uint256 chainNow = block.timestamp;
+        uint256 age = (wallNow > chainNow ? wallNow : chainNow) - uint256(p.updatedAt);
+        if (wallNow > chainNow + 60) {
+            console.log("  note  chain clock is %s s behind wall time; ages measured against wall time", wallNow - chainNow);
+        }
         if (age >= MAX_ORACLE_AGE) {
             console.log("  FAIL  oracle is STALE (%s s old, limit %s)", age, MAX_ORACLE_AGE);
             console.log("        every Vortex Swap quote will revert VortexStaleOracle");
