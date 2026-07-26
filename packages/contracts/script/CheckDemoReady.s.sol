@@ -98,7 +98,9 @@ contract CheckDemoReady is Script {
 
         if (p.midPriceE18 != COMPETITIVE_MID_E18) {
             console.log("  WARN  maker is NOT on the competitive baseline (mid %s e18)", p.midPriceE18 / 1e18);
-            console.log("        the headline best-execution scene will show Aqua losing");
+            console.log("        the headline best-execution scene will show Aqua losing, and");
+            console.log("        ~300 of the hook's 500 bps deviation budget is spent, so Grow");
+            console.log("        can revert in beforeSwap once the pool price has drifted");
             console.log("        fix: SCENARIO=AQUA_WINS forge script script/SetDemoScenario.s.sol --broadcast ...");
             failures++;
         } else {

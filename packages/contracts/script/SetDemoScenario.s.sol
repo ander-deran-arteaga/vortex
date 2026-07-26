@@ -56,6 +56,24 @@ contract SetDemoScenario is Script {
         console.log("scenario  %s", scenario);
         console.log("mid       %s", mid / 1e18);
         console.log("bid / ask %s / %s", bid / 1e18, ask / 1e18);
+
+        // The de-tuned mark eats most of the PermAMM hook's pool-vs-oracle
+        // deviation headroom: it moves the mark 300 bps against a 500 bps cap,
+        // leaving ~200 bps. Grow's first leg swaps that same pool, so on a
+        // fresh chain it still succeeds — but once trading has drifted the pool
+        // price by more than the remaining headroom, Grow reverts in
+        // beforeSwap. Measured, not assumed: Grow completes under this scenario
+        // on a freshly bootstrapped chain.
+        if (mid != AQUA_WINS_MID) {
+            console.log("");
+            console.log("WARNING: this scenario uses ~300 bps of the PermAMM hook's 500 bps");
+            console.log("  pool-vs-oracle deviation budget, leaving ~200 bps.");
+            console.log("  Vortex Grow's first leg swaps that pool. It still works on a fresh");
+            console.log("  chain, but once trading has drifted the pool price it will revert");
+            console.log("  in beforeSwap (VortexPoolDeviationTooLarge, 0x93830b27).");
+            console.log("  Reset before demoing Grow:");
+            console.log("  SCENARIO=AQUA_WINS forge script script/SetDemoScenario.s.sol --broadcast ...");
+        }
     }
 
     function _midFor(string memory scenario) internal pure returns (uint256) {
