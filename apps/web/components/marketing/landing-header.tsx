@@ -4,14 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { VortexMark } from "@/components/ui/vortex-mark";
 
-const SECTIONS = [
-  { href: "#problem", label: "The leak" },
-  { href: "#choice", label: "The trade-off" },
-  { href: "#how", label: "How it works" },
-  { href: "#guarantees", label: "Guarantees" },
-  { href: "#products", label: "Products" },
-] as const;
-
 /**
  * The landing header carries no wallet button: connecting is friction on a
  * marketing page and belongs where it is used. One action only, and it goes
@@ -48,21 +40,6 @@ export function LandingHeader() {
           />
           <span className="font-display text-lg leading-none">Vortex</span>
         </Link>
-
-        <nav
-          aria-label="Sections"
-          className="hidden min-w-0 flex-1 items-center gap-6 text-sm md:flex"
-        >
-          {SECTIONS.map((section) => (
-            <a
-              key={section.href}
-              href={section.href}
-              className="text-say-2 transition-colors duration-150 hover:text-say-1"
-            >
-              {section.label}
-            </a>
-          ))}
-        </nav>
 
         <Link
           href="/swap"
