@@ -63,9 +63,13 @@ stop_by_pid() {
     local pid
     pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
     if [[ -n "$pid" ]]; then
-      # Kill the socket holder by PID. Services started by this script get their
-      # own session via `setsid`, so their children go with them; anything
-      # started by hand outside the script is left to its owner to stop.
+      # Kill the holder's whole SESSION. Services here are started with
+      # `setsid`, so the session is exactly "this service and its workers" —
+      # precise, and unlike killing the socket holder it cannot be undone by
+      # `next` respawning the worker that happened to own the port.
+      local sid
+      sid=$(ps -o sid= -p "$pid" 2>/dev/null | tr -d ' ')
+      [[ -n "$sid" ]] && pkill -9 -s "$sid" 2>/dev/null
       kill "$pid" 2>/dev/null
       for _ in $(seq 1 15); do
         ss -ltn 2>/dev/null | grep -q ":$p " || break
