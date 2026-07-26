@@ -369,3 +369,34 @@ Uniswap one):
 cd apps/api
 VORTEX_INTEGRATION=1 npx vitest run tests/integration
 ```
+
+---
+
+## 7. One-command verification
+
+```bash
+./scripts/verify-demo.sh              # verify whatever is currently running
+FRESH=1 ./scripts/verify-demo.sh      # stop everything, reset the chain, rebuild, then verify
+```
+
+Walks the judge path over real HTTP and RPC: chain id, API chain and contract
+count, every web route, deployment-artifact drift, both strategies' executable
+liquidity, a Vortex Swap quote → build → single-use session, an oversized trade
+being refused with an actionable reason, a full Grow cycle with the maker's
+virtual balance growing, and an unprofitable cycle reported as a clean no-op
+with balances untouched. Exits non-zero on the first failure and names the
+layer that owns it.
+
+`FRESH=1` also **proves** the chain is new rather than assuming it: a freshly
+shipped Grow strategy sits at exactly its seeded baseline, so carried-over
+profit from a previous run is a failure, not a silent pass.
+
+Three things this caught that `pnpm test` cannot:
+
+- `next dev` **silently moving to another port** when 3000 is still held, so
+  every instruction points at a server nobody is running.
+- A first page load returning **500 while Next compiles**, which looks
+  identical to a broken build if you probe once and trust it.
+- A stopped service **whose workers keep the port**, because killing the socket
+  holder just makes `next` respawn it. Services are started with `setsid` and
+  stopped by session id for exactly this reason.
