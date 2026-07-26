@@ -31,7 +31,27 @@ head() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 # wrong port. Everything looks up while the runbook, and the judge, are pointed
 # at 3000. Silent port drift is exactly the failure this project keeps hitting,
 # so it is treated as fatal rather than tidied around.
+# Services this script started are recorded by PID. Because they are launched
+# with `setsid`, that PID is a session and group leader, so killing the group
+# takes pnpm, next/tsx and every worker with it. Killing only the socket holder
+# does not work: the listener is a worker that `next` immediately respawns, and
+# the port never frees.
+stop_recorded() {
+  for f in .verify-api.pid .verify-web.pid; do
+    [[ -f "$f" ]] || continue
+    local lead; lead=$(cat "$f" 2>/dev/null)
+    if [[ -n "$lead" ]] && kill -0 "$lead" 2>/dev/null; then
+      kill -TERM -- "-$lead" 2>/dev/null
+      sleep 2
+      kill -0 "$lead" 2>/dev/null && kill -9 -- "-$lead" 2>/dev/null
+    fi
+    rm -f "$f"
+  done
+  sleep 2
+}
+
 stop_by_pid() {
+  stop_recorded
   for p in 3000 3001 8545; do
     local pid
     pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
@@ -78,7 +98,9 @@ if [[ "${FRESH:-0}" == "1" ]]; then
   # `setsid` puts each service in its own session, so stopping it later takes
   # its children with it instead of orphaning workers that keep holding a port.
   setsid nohup pnpm --filter @vortex/api demo >/tmp/verify-api.log 2>&1 < /dev/null &
+  echo $! > .verify-api.pid
   setsid nohup pnpm --filter @vortex/web dev  >/tmp/verify-web.log 2>&1 < /dev/null &
+  echo $! > .verify-web.pid
   wait_for_200 "$API/api/v1/health" 45 || { fail "API never became ready" "backend"; exit 1; }
   # First-request compile in dev mode is slow; give it a real budget.
   wait_for_200 "$WEB/" 90              || { fail "web never served a 200" "frontend"; exit 1; }

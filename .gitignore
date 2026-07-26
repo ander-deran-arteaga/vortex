@@ -36,3 +36,4 @@ coordination/
 
 # detached anvil logs from scripts/ensure-demo.sh
 .anvil-*.log
+.verify-*.pid
