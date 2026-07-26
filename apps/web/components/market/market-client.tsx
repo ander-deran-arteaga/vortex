@@ -1,0 +1,249 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { DepthCurve, type Series } from "@/components/market/depth-curve";
+import { SpreadTable, type VenueRow } from "@/components/market/spread-table";
+import { Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
+import { useMarketComparison } from "@/hooks/useMarketComparison";
+import { binanceCurve, binanceSpreadAt } from "@/lib/market/binance";
+import type { CurvePoint } from "@/lib/market/model";
+import { SAMPLE_SIZES, SELECTABLE_SIZES } from "@/lib/market/vortex";
+import { formatTokenAmount } from "@/lib/format";
+
+const MAX_SIZE = SAMPLE_SIZES[SAMPLE_SIZES.length - 1] as bigint;
+
+function ago(timestamp: number, now: number): string {
+  const seconds = Math.max(0, Math.round((now - timestamp) / 1000));
+  return seconds < 2 ? "just now" : `${seconds}s ago`;
+}
+
+/** A feed's own line: what it is, when it last answered, or why it did not. */
+function FeedStatus({
+  name,
+  at,
+  error,
+  now,
+}: {
+  name: string;
+  at: number | null;
+  error: string | null;
+  now: number;
+}) {
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+      <StatusMark tone={error !== null ? "loss" : at === null ? "muted" : "gain"} />
+      <span className="text-say-2">{name}</span>
+      {error !== null ? (
+        <span className="text-loss">{error}</span>
+      ) : at === null ? (
+        <span className="text-say-3">waiting</span>
+      ) : (
+        <span className="num text-say-3">{ago(at, now)}</span>
+      )}
+    </p>
+  );
+}
+
+export function MarketClient() {
+  const [size, setSize] = useState<bigint>(SELECTABLE_SIZES[1] as bigint);
+  const { book, binanceError, vortex, vortexError, loading } = useMarketComparison();
+
+  // One clock for both "x seconds ago" labels, ticking with the faster feed.
+  const now = book?.fetchedAt ?? Date.now();
+
+  const selected = vortex?.samples.find((s) => s.size === size) ?? null;
+  const binance = book === null ? null : binanceSpreadAt(book, size);
+
+  const rows: VenueRow[] = [
+    {
+      name: "Vortex Aqua",
+      detail: "SwapVM against maker inventory",
+      spread: selected?.aqua ?? null,
+      note:
+        selected?.aquaNote ??
+        (vortexError !== null ? "The Vortex API is not answering." : "Sampling…"),
+      source: selected?.aqua ? "live" : "unavailable",
+    },
+    {
+      name: "Vortex PermAMM",
+      detail: "Uniswap v4 pool behind the Vortex hook",
+      spread: null,
+      // Not a gap: the pool refuses to price for anyone without a signed
+      // authorisation, which is the whole point of it. Quoting it from a
+      // browser reverts with VortexHookDataRequired.
+      note: "Prices only against a signed authorisation, so it cannot be quoted from a browser.",
+      source: "unavailable",
+    },
+    {
+      name: "Uniswap",
+      detail: "Trade API, real WBTC/USDC",
+      spread: selected?.uniswap ?? null,
+      note:
+        selected?.uniswapNote ??
+        (vortexError !== null ? "The Vortex API is not answering." : "Sampling…"),
+      source: selected?.uniswap ? "live" : "unavailable",
+    },
+    {
+      name: "Binance",
+      detail: "BTC/USDC order book, read in this browser",
+      spread: binance,
+      note:
+        binanceError ??
+        (book === null ? "Loading the book…" : "The book cannot fill this size."),
+      source: binance === null ? "unavailable" : "live",
+    },
+  ];
+
+  const series: Series[] = useMemo(() => {
+    const out: Series[] = [];
+    const toPoints = (
+      pick: (s: NonNullable<typeof selected>) => { bidBps: number; askBps: number } | null,
+    ): CurvePoint[] =>
+      (vortex?.samples ?? []).flatMap((sample) => {
+        const spread = pick(sample);
+        return spread === null
+          ? []
+          : [
+              { size: sample.size, bps: spread.bidBps, side: "bid" as const },
+              { size: sample.size, bps: spread.askBps, side: "ask" as const },
+            ];
+      });
+
+    const aqua = toPoints((s) => s.aqua);
+    if (aqua.length > 0) {
+      out.push({ name: "Vortex Aqua", points: aqua, stroke: "var(--color-cu)" });
+    }
+    const uniswap = toPoints((s) => s.uniswap);
+    if (uniswap.length > 0) {
+      out.push({
+        name: "Uniswap",
+        points: uniswap,
+        stroke: "var(--color-say-3)",
+        dashed: true,
+      });
+    }
+    if (book !== null) {
+      out.push({
+        name: "Binance",
+        points: binanceCurve(book, MAX_SIZE),
+        stroke: "var(--color-say-2)",
+      });
+    }
+    return out;
+  }, [vortex, book]);
+
+  return (
+    <Page>
+      <PageHead
+        title="Market comparison"
+        lead="The same trade, priced at every venue, normalised to basis points of each venue's own mid."
+      />
+
+      {/*
+        Stated once, plainly, before any number is read. Vortex settles on a
+        local demo chain against a reference mark; Binance is the real market.
+        The comparison is of pricing behaviour, not of settled liquidity.
+      */}
+      <div className="panel-raised mb-8 flex gap-3 p-4">
+        <StatusMark tone="warn" className="mt-[7px] shrink-0" />
+        <p className="min-w-0 flex-1 text-sm leading-relaxed text-say-2">
+          Vortex runs on a local demo chain against a reference mark, so this
+          compares <span className="text-say-1">pricing behaviour</span>, not
+          settled liquidity. Binance is the real book. Absolute prices differ
+          between venues by construction, which is exactly why every figure here
+          is measured in basis points from the venue&rsquo;s own mid.
+        </p>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-say-2">Size</span>
+          <div role="group" aria-label="Trade size in WBTC" className="flex gap-1 rounded-[4px] bg-ink-1 p-1">
+            {SELECTABLE_SIZES.map((option) => {
+              const active = option === size;
+              return (
+                <button
+                  key={String(option)}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setSize(option)}
+                  className={`num min-h-[44px] rounded-[3px] px-3.5 text-sm transition-colors duration-150 ${
+                    active ? "bg-ink-3 text-cu" : "text-say-2 hover:text-say-1"
+                  }`}
+                >
+                  {formatTokenAmount(option, 8, 3)}
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-xs text-say-3">WBTC</span>
+        </div>
+
+        <div className="space-y-1.5">
+          <FeedStatus
+            name="Binance"
+            at={book?.fetchedAt ?? null}
+            error={binanceError}
+            now={now}
+          />
+          <FeedStatus
+            name="Vortex API"
+            at={vortex?.sampledAt ?? null}
+            error={vortexError}
+            now={now}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <Panel cut title="Spread by venue">
+          <SpreadTable rows={rows} size={size} />
+        </Panel>
+
+        <Panel title="Where size costs you">
+          {loading && series.length === 0 ? (
+            <p className="px-1 py-10 text-center text-sm text-say-2">
+              Sampling both books…
+            </p>
+          ) : (
+            <>
+              <DepthCurve series={series} maxSize={MAX_SIZE} />
+              <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+                {series.map((s) => (
+                  <span key={s.name} className="flex items-center gap-2 text-say-2">
+                    <span
+                      aria-hidden="true"
+                      className="inline-block h-0.5 w-5 rounded-full"
+                      style={{
+                        background: s.stroke,
+                        opacity: s.dashed === true ? 0.7 : 1,
+                      }}
+                    />
+                    {s.name}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-4 max-w-2xl text-sm leading-relaxed text-say-2">
+                A line that rises straight up is a venue holding its price as the
+                size grows; one that leans outward is charging more for size.
+                Binance is vertical here — its top of book absorbs every size on
+                this chart without moving — and Uniswap barely leans. Vortex
+                leans the most: the inventory adjustment widens the quote as the
+                size grows, which is a maker with a two-WBTC book protecting it.
+                That is the honest shape, and it is the number the comparison on
+                the swap page has to beat.
+              </p>
+            </>
+          )}
+        </Panel>
+      </div>
+
+      <p className="mt-8 text-xs leading-relaxed text-say-3">
+        Sizes stop at {formatTokenAmount(MAX_SIZE, 8, 2)} WBTC because the
+        maker&rsquo;s per-trade cap refuses more, and a chart of refusals teaches
+        nothing. Binance is read directly from this browser; nothing here is
+        proxied, cached or substituted, and a feed that cannot answer says so.
+      </p>
+    </Page>
+  );
+}
