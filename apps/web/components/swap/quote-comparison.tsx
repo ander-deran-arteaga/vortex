@@ -25,7 +25,7 @@ function usdc(value: string): string {
 interface SharedLeg {
   amountOut: string;
   minimumAmountOut: string;
-  estimatedGasUsd: string;
+  estimatedGasUsd: string | null;
   netAmountOut: string;
 }
 
@@ -66,7 +66,17 @@ function SharedRows({ leg, selected }: { leg: SharedLeg; selected: boolean }) {
         value={`${usdc(leg.minimumAmountOut)} USDC`}
         quiet={!selected}
       />
-      <DetailRow label="Est. gas" value={`$${leg.estimatedGasUsd}`} quiet={!selected} />
+      {/*
+        Gas is nullable in the shared schema: the API returns null when it has
+        no estimate rather than a misleading zero. An em dash is the honest
+        rendering of "not known". Net output is left exactly as the API
+        computed it.
+      */}
+      <DetailRow
+        label="Est. gas"
+        value={leg.estimatedGasUsd === null ? "—" : `$${leg.estimatedGasUsd}`}
+        quiet={!selected}
+      />
 
       {/*
         Net output decides the trade, so it is the one number on the card set

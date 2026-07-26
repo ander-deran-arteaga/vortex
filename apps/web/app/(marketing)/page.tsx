@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FalseChoice } from "@/components/marketing/false-choice";
+import { GrowFlowSection } from "@/components/marketing/grow-flow/grow-flow-section";
 import { PriceLeak } from "@/components/marketing/price-leak";
 import { VortexMark } from "@/components/ui/vortex-mark";
 
@@ -348,6 +349,8 @@ export default function LandingPage() {
             </p>
           </article>
         </div>
+
+        <GrowFlowSection />
       </Section>
 
       {/* ───────────────────────────── 7 · built on ───────────────────────── */}
