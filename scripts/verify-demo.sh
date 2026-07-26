@@ -100,24 +100,6 @@ if [[ "${FRESH:-0}" == "1" ]]; then
   rm -rf apps/web/.next .anvil-8545.log
   bash scripts/ensure-demo.sh >/tmp/verify-chain.log 2>&1
   grep -q "READY" /tmp/verify-chain.log && echo "  chain READY" || { fail "chain bring-up" "contracts/deployment"; tail -5 /tmp/verify-chain.log; exit 1; }
-  # Prove the chain is actually new rather than assuming the teardown worked.
-  # A freshly shipped Grow strategy holds exactly its seeded baseline; if it
-  # holds more, a previous run's profit is still there and this is not a fresh
-  # environment — which would make a "clean run" claim false.
-  FRESH_BASELINE=$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').shippedAsset)" 2>/dev/null)
-  FRESH_ACTUAL=$(cast call "$(node -e "console.log(require('$ROOT/deployments/31337.json').contracts.Aqua)")" \
-    "safeBalances(address,address,bytes32,address,address)(uint256,uint256)" \
-    "$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').strategy.maker)")" \
-    "$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').compounder)")" \
-    "$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').growStrategyHash)")" \
-    "$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').strategy.asset)")" \
-    "$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').strategy.asset)")" \
-    --rpc-url $RPC 2>/dev/null | head -1 | tr -d ' ')
-  if [[ "$FRESH_ACTUAL" == "$FRESH_BASELINE" ]]; then
-    echo "  chain is genuinely fresh (Grow at baseline $FRESH_BASELINE)"
-  else
-    echo "  NOTE: chain carried over state (Grow $FRESH_ACTUAL vs baseline $FRESH_BASELINE) — teardown left anvil running"
-  fi
   # `setsid` puts each service in its own session, so stopping it later takes
   # its children with it instead of orphaning workers that keep holding a port.
   setsid nohup pnpm --filter @vortex/api demo >/tmp/verify-api.log 2>&1 < /dev/null &
@@ -214,6 +196,15 @@ TX=$(node -pe "JSON.parse(process.argv[1]).txHash||''" "$E" 2>/dev/null)
 VA=$(curl -s -m 15 "$API/api/v1/strategies/$GROW_HASH" | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).tokens[0].virtualBalance" 2>/dev/null)
 [[ -n "$VB" && -n "$VA" && "$VA" -gt "$VB" ]] \
   && pass "maker virtual WBTC grew ($VB -> $VA)" || fail "virtual balance did not grow ($VB -> $VA)" "contracts"
+# Freshness is verifiable, not assumed: a newly shipped Grow strategy sits at
+# exactly its seeded baseline. Anything higher means a previous run's profit
+# survived, so the environment was not actually clean.
+BASELINE=$(node -e "console.log(require('$ROOT/deployments/31337.grow.json').shippedAsset)" 2>/dev/null)
+if [[ "${FRESH:-0}" == "1" ]]; then
+  [[ "$VB" == "$BASELINE" ]] \
+    && pass "chain was genuinely fresh (Grow started at baseline $BASELINE)" \
+    || fail "chain carried state: Grow started at $VB, baseline is $BASELINE" "environment"
+fi
 
 # ── Flow 7 — Grow refuses an unprofitable cycle ─────────────────────
 head "Flow 7 — Vortex Grow (failure protection)"
