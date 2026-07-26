@@ -498,6 +498,7 @@ export function GrowClient() {
                 id="grow-principal"
                 name="grow-principal"
                 type="text"
+                size={1}
                 inputMode="decimal"
                 autoComplete="off"
                 value={principalInput}

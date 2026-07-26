@@ -47,6 +47,7 @@ export function SwapForm({
             id="swap-amount"
             name="swap-amount"
             type="text"
+            size={1}
             inputMode="decimal"
             autoComplete="off"
             placeholder="0.00000000"

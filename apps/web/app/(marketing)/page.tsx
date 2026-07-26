@@ -112,13 +112,16 @@ export default function LandingPage() {
           </p>
 
           {/*
-            Two lines at every width. The size is capped so the first line
-            cannot wrap on a 1152px container, and the explicit break keeps the
-            second line whole instead of letting a stray word dangle.
+            Two lines at every width, including 390px. The break is
+            unconditional so the tone change always starts a line: letting it
+            wrap naturally on mobile put "making, enforced" on one row and the
+            colour shift landed mid-phrase. The lower clamp bound is sized so
+            the first line still fits the 360px floor without wrapping, and
+            the viewport coefficient carries it up from there.
           */}
-          <h1 className="mt-6 max-w-[15ch] text-[clamp(2.1rem,5vw,3.75rem)] leading-[1.04] text-say-1 sm:max-w-none">
+          <h1 className="mt-6 text-[clamp(1.6rem,7.2vw,3.75rem)] leading-[1.06] text-say-1">
             Active market making,
-            <br className="hidden sm:block" />{" "}
+            <br />
             <span className="text-say-2">enforced by contracts.</span>
           </h1>
 

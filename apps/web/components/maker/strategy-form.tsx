@@ -182,6 +182,7 @@ export function StrategyForm({
                   id={inputId}
                   name={inputId}
                   type="text"
+                  size={1}
                   inputMode="decimal"
                   autoComplete="off"
                   value={field.value}
