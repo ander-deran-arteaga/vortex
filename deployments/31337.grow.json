@@ -3,9 +3,9 @@
   "compounder": "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1",
   "externalTarget": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
   "externalVenueKind": "SIMULATED",
-  "externalVenuePriceWholeUsdc": 95000,
+  "externalVenuePriceWholeUsdc": 61560,
   "growStrategyHash": "0xcf197695884158f8fa965ce83d23d4242c8d7f5b013ab186d018a23b9d4c18df",
-  "poolMarkWholeUsdc": 100000,
+  "poolMarkWholeUsdc": 64800,
   "shippedAsset": 500000000,
   "strategy": {
     "asset": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",

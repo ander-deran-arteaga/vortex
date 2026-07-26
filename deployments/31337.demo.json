@@ -8,12 +8,12 @@
     "maker": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
     "traits": "0x4000000000000000000000000000000000000000000000000000000000000000"
   },
-  "quoteShipped": 200000000000,
+  "quoteShipped": 129600000000,
   "quoteToken": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
   "rebateSigner": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
   "sampleQuote": {
     "amountIn": 5000000,
-    "amountOut": 4979009250,
+    "amountOut": 3226397994,
     "isExactIn": true,
     "tokenIn": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
     "tokenOut": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
