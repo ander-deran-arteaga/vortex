@@ -52,6 +52,7 @@ export DEPLOY_OUT SEED_OUT
 started_chain=0
 deployed=0
 shipped=0
+refreshed=0
 
 say()  { printf '  %s\n' "$*"; }
 step() { printf '\n==> %s\n' "$*"; }
@@ -131,7 +132,47 @@ else
   say "fork mode: Vortex Swap only, seeded by SeedDemo"
 fi
 
-# ── 4. verdict ──────────────────────────────────────────────────────────────
+# ── 4. oracle freshness ─────────────────────────────────────────────────────
+# The demo's most likely failure, and a silent one. Vortex Swap pricing rejects
+# an oracle older than an hour. An idle chain keeps reporting the oracle as
+# fresh because block.timestamp is frozen at the last block — then the demo's
+# first transaction mines a block stamped with wall-clock time and every quote
+# and every Grow cycle reverts VortexStaleOracle. It cost a green run today.
+#
+# Re-stamping is cheap and changes no number, so do it whenever the oracle is
+# past half its budget rather than waiting for the cliff.
+step "oracle"
+if [[ -z "${FORK_RPC_URL:-}" ]]; then
+  oracle=$(python3 -c "import json;print(json.load(open('$ROOT/deployments/$DEPLOY_OUT'))['contracts']['MockReferenceOracle'])" 2>/dev/null)
+  # cast annotates big numbers ("1785044412 [1.785e9]"), so take the 4th field
+  # and keep only its leading digits.
+  updated=$(cast call "$oracle" "latestPrice()((uint256,uint256,uint256,uint40))" --rpc-url "$RPC" 2>/dev/null \
+            | tr -d '()' | awk -F, '{print $4}' | grep -oE '[0-9]+' | head -1)
+  if [[ "$updated" =~ ^[0-9]+$ ]]; then
+    # Age against whichever clock is AHEAD, matching CheckDemoReady exactly: the
+    # next mined block carries wall-clock time, but a chain whose own clock has
+    # been pushed forward is already past it. Measuring only one of the two
+    # leaves a chain the pre-flight fails and this step thought was fine.
+    chain_ts=$(cast block latest --field timestamp --rpc-url "$RPC" 2>/dev/null)
+    now=$(date +%s)
+    [[ "$chain_ts" =~ ^[0-9]+$ ]] && (( chain_ts > now )) && now=$chain_ts
+    age=$(( now - updated ))
+    if (( age >= 1800 )); then
+      ( cd "$CONTRACTS" && SCENARIO=REFRESH forge script script/SetDemoScenario.s.sol \
+          --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast >/dev/null 2>&1 ) \
+        && { refreshed=1; say "was ${age}s old (limit 3600) - re-stamped at the same price"; } \
+        || say "WARNING: oracle is ${age}s old and the re-stamp failed"
+    else
+      say "fresh (${age}s old of 3600) - leaving it alone"
+    fi
+  else
+    say "could not read the oracle; the pre-flight below is authoritative"
+  fi
+else
+  say "fork mode: oracle not managed here"
+fi
+
+# ── 5. verdict ──────────────────────────────────────────────────────────────
 step "pre-flight"
 ( cd "$CONTRACTS" && forge script script/CheckDemoReady.s.sol --rpc-url "$RPC" 2>&1 ) \
   | grep -aE "^ *(ok|note|WARN|FAIL) |READY" | sed 's/^ */  /'
@@ -140,5 +181,6 @@ step "summary"
 say "chain      : $([[ $started_chain == 1 ]] && echo 'started by this run' || echo 'was already running') ($RPC)"
 say "contracts  : $([[ $deployed == 1 ]] && echo 'deployed by this run' || echo 'already present')"
 say "strategies : $([[ $shipped == 1 ]] && echo 'shipped by this run' || echo 'already shipped')"
+say "oracle     : $([[ $refreshed == 1 ]] && echo 're-stamped by this run' || echo 'was already fresh')"
 say "artifacts  : deployments/$DEPLOY_OUT, deployments/$SEED_OUT"
 printf '\nSafe to re-run. It will report "already present" and change nothing.\n'

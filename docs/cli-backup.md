@@ -36,8 +36,10 @@ healthy in every one of them:
   fresh right up until the demo's first transaction mines a block — and then
   every quote reverts `VortexStaleOracle`. The pre-flight therefore measures age
   against **wall clock**, not the frozen `block.timestamp` of an idle chain; it
-  reports how far the chain clock is behind. Refresh with section 3's
-  `SCENARIO=AQUA_WINS`, which re-stamps the price.
+  reports how far the chain clock is behind. Fix with `./scripts/ensure-demo.sh`,
+  which re-stamps the oracle at its **current** price when it is past half the
+  budget — so it repairs a stale chain without disturbing a deliberate
+  `UNISWAP_WINS` mark. (`SCENARIO=REFRESH` is that step on its own.)
 
   This bites in practice: a chain left idle overnight reads "0 s old" and is
   four hours stale the instant anyone touches it. **Run the pre-flight

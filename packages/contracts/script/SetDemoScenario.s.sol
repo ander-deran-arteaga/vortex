@@ -18,6 +18,13 @@ import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 ///      Usage (the oracle owner must be the caller — the deployer by default):
 ///        SCENARIO=AQUA_WINS    forge script script/SetDemoScenario.s.sol --broadcast ...
 ///        SCENARIO=UNISWAP_WINS forge script script/SetDemoScenario.s.sol --broadcast ...
+///        SCENARIO=REFRESH      re-stamps the CURRENT price, changing no number
+///
+///      `REFRESH` exists because staleness is a clock problem, not a pricing
+///      one: an idle chain reports a fresh oracle until its next mined block
+///      carries wall-clock time, and then every quote reverts VortexStaleOracle.
+///      `scripts/ensure-demo.sh` calls it automatically when the oracle is
+///      close to the limit, which is why nobody has to remember this command.
 ///
 ///      Bounds that keep the rest of the system honest while this moves:
 ///      - the bid/ask spread stays at 10 bps, under VortexAquaPricing's 50 bps
@@ -44,10 +51,22 @@ contract SetDemoScenario is Script {
             MockReferenceOracle(vm.parseJsonAddress(vm.readFile(path), ".contracts.MockReferenceOracle"));
 
         string memory scenario = vm.envOr("SCENARIO", string("AQUA_WINS"));
-        uint256 mid = _midFor(scenario);
 
-        uint256 bid = mid - (mid * HALF_SPREAD_BPS) / 10_000;
-        uint256 ask = mid + (mid * HALF_SPREAD_BPS) / 10_000;
+        uint256 mid;
+        uint256 bid;
+        uint256 ask;
+        if (keccak256(bytes(scenario)) == keccak256("REFRESH")) {
+            // Re-stamp the CURRENT price rather than imposing a scenario. An
+            // idle chain goes stale on its next mined block, and the fix must
+            // not silently drag a deliberate UNISWAP_WINS back to the
+            // competitive mark in the middle of a demo.
+            MockReferenceOracle.PriceData memory p = oracle.latestPrice();
+            (mid, bid, ask) = (p.midPriceE18, p.bidPriceE18, p.askPriceE18);
+        } else {
+            mid = _midFor(scenario);
+            bid = mid - (mid * HALF_SPREAD_BPS) / 10_000;
+            ask = mid + (mid * HALF_SPREAD_BPS) / 10_000;
+        }
 
         vm.startBroadcast();
         oracle.setPrice(mid, bid, ask);

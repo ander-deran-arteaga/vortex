@@ -105,13 +105,13 @@ contract CheckDemoReady is Script {
         }
         if (age >= MAX_ORACLE_AGE) {
             console.log("  FAIL  oracle is STALE (%s s old, limit %s)", age, MAX_ORACLE_AGE);
-            console.log("        every Vortex Swap quote will revert VortexStaleOracle");
-            console.log("        fix: SCENARIO=AQUA_WINS forge script script/SetDemoScenario.s.sol --broadcast ...");
+            console.log("        every Vortex Swap quote and Grow cycle reverts VortexStaleOracle");
+            console.log("        fix: ./scripts/ensure-demo.sh - it re-stamps at the same price");
             failures++;
         } else if (age >= (MAX_ORACLE_AGE * 3) / 4) {
             // The demo's own transactions advance the clock, so "nearly stale"
             // becomes "stale mid-demo".
-            console.log("  WARN  oracle is %s s old of %s allowed - refresh before demoing", age, MAX_ORACLE_AGE);
+            console.log("  WARN  oracle is %s s old of %s allowed - run ./scripts/ensure-demo.sh", age, MAX_ORACLE_AGE);
             failures++;
         } else {
             console.log("  ok    oracle fresh (%s s old)", age);

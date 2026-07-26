@@ -67,6 +67,14 @@ deployed, while the API answers `STRATEGY_NOT_FOUND`. A strategy is Aqua
 *state*, not a contract. If you see that error, run this command — it will say
 `shipped by this run` and the chain will be healthy.
 
+It also **re-stamps the reference oracle** when it is past half its one-hour
+budget. This is the demo's most likely failure and a silent one: an idle chain
+keeps reporting the oracle as fresh, because `block.timestamp` is frozen at the
+last block, and then the demo's first transaction mines a block carrying
+wall-clock time and every quote and Grow cycle reverts `VortexStaleOracle`. The
+re-stamp changes no number — a deliberate `UNISWAP_WINS` mark stays where you
+put it — so **running this command before demoing is always safe**.
+
 The last thing it runs is the read-only pre-flight
 (`packages/contracts/script/CheckDemoReady.s.sol`), which is the single source
 of truth for chain health: core contracts deployed, oracle fresh against **wall
