@@ -64,9 +64,9 @@ forge test
 
 - **Uniswap Developer Platform** — the Trade API is load-bearing: it
   benchmarks every Aqua quote, builds the fallback swap when Uniswap wins, and
-  (where feasible) builds the external leg of Vortex Grow. Evidence (request
-  IDs, transaction hashes, direct code links) is collected here and in
-  [FEEDBACK.md](./FEEDBACK.md) as integration lands.
+  (where feasible) builds the external leg of Vortex Grow. Request IDs,
+  transaction hashes, and direct code links are in the verification table
+  below and in [FEEDBACK.md](./FEEDBACK.md).
 - **1inch Aqua / SwapVM** — official Aqua contracts, a meaningful SwapVM
   strategy for Vortex Swap, and a custom pull/push Aqua app for Vortex Grow,
   with real ERC-20 settlement proven by tests.
