@@ -1,0 +1,6 @@
+packages/contracts/out
+packages/contracts/cache
+packages/contracts/broadcast
+apps/api/data
+coordination
+.anvil-*.log
