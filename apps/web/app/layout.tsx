@@ -21,7 +21,7 @@ const sentient = localFont({
 export const metadata: Metadata = {
   title: "Vortex",
   description:
-    "Active market making, enforced by contracts. Makers quote actively while the spread, inventory limits and profit floor are enforced onchain.",
+    "Quote like a market maker. Trust like a contract. Makers price actively while the spread, inventory limits and profit floor are enforced onchain.",
 };
 
 /**

@@ -108,8 +108,6 @@ export default function LandingPage() {
         <div className="relative">
           <p className="text-sm text-say-2">
             Programmable market making
-            <span className="mx-2 text-say-3">·</span>
-            Arbitrum One
           </p>
 
           {/*
@@ -121,9 +119,9 @@ export default function LandingPage() {
             the viewport coefficient carries it up from there.
           */}
           <h1 className="mt-6 text-[clamp(1.6rem,7.2vw,3.75rem)] leading-[1.06] text-say-1">
-            Active market making,
+            Quote like a market maker.
             <br />
-            <span className="text-say-2">enforced by contracts.</span>
+            <span className="text-say-2">Trust like a contract.</span>
           </h1>
 
           <div className="mt-10 flex flex-wrap items-start gap-x-14 gap-y-8">
@@ -160,7 +158,7 @@ export default function LandingPage() {
           Every time a pool price goes stale, someone profits.
         </h2>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-          It is usually not the liquidity provider. A passive pool cannot move
+          A passive pool cannot move
           its own price: it waits to be corrected by an arbitrageur, and pays
           for the correction.
         </p>
@@ -227,13 +225,13 @@ export default function LandingPage() {
               <div>
                 <dt className="text-sm text-cu">The comparator</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Improves the quote only while the maker stays profitable.
+                  Improves the quote against the leader venue, if the maker stays profitable.
                 </dd>
               </div>
               <div>
                 <dt className="text-sm text-cu">A fresh reference price</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Required on every swap, checked before anything settles.
+                  Chainlink pull oracle, required on every swap, checked before it settles.
                 </dd>
               </div>
             </dl>
@@ -256,7 +254,7 @@ export default function LandingPage() {
           The quote signer cannot cross these lines.
         </h2>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-          Each of these is a real check in the deployed contracts. The names
+          Each of these is a real check in SwapVM. The names
           below are the errors they revert with.
         </p>
 
@@ -309,10 +307,6 @@ export default function LandingPage() {
               Aqua executes only when it wins on net output; otherwise the API
               builds the transaction.
             </p>
-            <p className="mt-4 text-xs text-say-3">
-              Figures shown are an illustration of the comparison, not a live
-              quote.
-            </p>
           </article>
 
           {/* Grow is a cycle: a closed loop with a gate on the final edge. */}
@@ -342,10 +336,7 @@ export default function LandingPage() {
             <p className="mt-6 flex-1 text-sm leading-relaxed text-say-2">
               A maker authorises an asset such as WBTC. Vortex runs an atomic
               cycle and it settles only if the maker ends with more of that same
-              asset. The performance fee comes from realised profit only.
-            </p>
-            <p className="mt-4 text-xs text-say-3">
-              The profit gate is enforced onchain, not checked afterwards.
+              asset.
             </p>
           </article>
         </div>
