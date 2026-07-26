@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
       "@x402/core": false,
       "@x402/evm": false,
       "@x402/svm": false,
+      // @metamask/sdk (transitive via RainbowKit) imports React Native's
+      // async-storage to persist a session on mobile. It is an optional peer
+      // that is not installed and never reached in a browser, but webpack
+      // still logs "Module not found" for it on every compile — noise in the
+      // console during a judged demo. Stub it for the same reason as above.
+      "@react-native-async-storage/async-storage": false,
     };
     return config;
   },
