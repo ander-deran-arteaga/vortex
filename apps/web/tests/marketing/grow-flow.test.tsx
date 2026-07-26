@@ -174,6 +174,22 @@ describe("grow flow section", () => {
     expect(screen.getByText(/fee comes out of the profit/i)).toBeInTheDocument();
   });
 
+  // The unprofitable cycle never takes a fee, so the fee panel must not keep
+  // printing the successful cycle's deduction while the captions say the whole
+  // transaction reverted and nothing moved.
+  it("shows no fee arithmetic once the cycle has failed", async () => {
+    const user = userEvent.setup();
+    mockReducedMotion(true);
+    render(<GrowFlowSection />);
+
+    await user.click(screen.getByRole("tab", { name: /unprofitable cycle/i }));
+
+    // Scoped to the fee panel: the step list also says no fee is taken.
+    expect(screen.getByText(/the floor was not met/i)).toBeInTheDocument();
+    expect(screen.queryByText(/fee comes out of the profit/i)).toBeNull();
+    expect(screen.queryByText(/1\.00240000/)).toBeNull();
+  });
+
   it("shows one caption at a time, in a single live region", () => {
     mockReducedMotion(false);
     const { container } = render(<GrowFlowSection />);

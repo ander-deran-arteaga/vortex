@@ -154,8 +154,38 @@ export function GateNode({ step, active }: { step: FlowStep; active: boolean }) 
  * The bar is split principal / profit, and the fee is cut from inside the
  * profit only. A reader must never be able to see the fee coming out of the
  * principal, because it does not.
+ *
+ * `failed` is the unprofitable cycle. There the floor is never met, so no fee
+ * is ever taken — printing the successful cycle's arithmetic here would show a
+ * deduction that did not happen, while the caption two lines down says nothing
+ * moved.
  */
-export function FeeSplit({ visible }: { visible: boolean }) {
+export function FeeSplit({
+  visible,
+  failed = false,
+}: {
+  visible: boolean;
+  failed?: boolean;
+}) {
+  if (failed) {
+    return (
+      <div>
+        <div
+          className="flex h-8 w-full overflow-hidden rounded-[3px] opacity-45"
+          aria-hidden="true"
+        >
+          <div className="flex w-full items-center justify-center bg-ink-3 text-[11px] text-say-2">
+            principal
+          </div>
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-say-2">
+          The floor was not met, so there is no profit and{" "}
+          <span className="text-say-1">no fee is taken</span>.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className={visible ? "" : "opacity-45"}>
       <div className="flex h-8 w-full overflow-hidden rounded-[3px]" aria-hidden="true">

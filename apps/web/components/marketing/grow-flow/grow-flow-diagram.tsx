@@ -155,7 +155,10 @@ export function GrowFlowDiagram({
             <p className="text-[13px] text-say-1">Fee</p>
             <p className="mt-0.5 text-xs text-say-3">20% of profit, never principal</p>
             <div className="mt-3">
-              <FeeSplit visible={at("fee") || at("return") || (at("maker") && stepNumber === totalSteps)} />
+              <FeeSplit
+                visible={at("fee") || at("return") || (at("maker") && stepNumber === totalSteps)}
+                failed={step.status === "failed"}
+              />
             </div>
           </div>
         </div>
