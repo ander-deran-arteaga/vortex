@@ -243,7 +243,7 @@ export default function LandingPage() {
           Real checks, each named by the error it reverts with.
         </p>
 
-        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {GUARANTEES.map((guarantee) => (
             <li key={guarantee.claim} className="panel flex flex-col p-5">
               <p className="text-[15px] leading-snug text-say-1">{guarantee.claim}</p>
