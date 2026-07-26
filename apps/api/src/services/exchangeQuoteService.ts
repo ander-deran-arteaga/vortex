@@ -6,6 +6,7 @@ import type {
 } from "@vortex/shared";
 import type { Hex } from "viem";
 
+import { explainAquaReason } from "../clients/liveAquaQuoteSource";
 import {
   quoteParamsFromRequest,
   UniswapApiError,
@@ -165,7 +166,9 @@ export async function quoteExchange(
 
   if (!aquaViable && !uniswapViable) {
     const reasons = [
-      aquaQuote?.reason ? `Aqua unavailable (${aquaQuote.reason})` : null,
+      aquaQuote?.reason
+        ? `Aqua unavailable (${explainAquaReason(aquaQuote.reason)})`
+        : null,
       uniswapQuote && uniswapQuote.txFailureReasons.length > 0
         ? `Uniswap simulation failed (${uniswapQuote.txFailureReasons.join(", ")})`
         : null,

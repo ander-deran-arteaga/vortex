@@ -14,6 +14,7 @@ import {
   AQUA_SWAP_GAS_UNITS,
   createLiveAquaQuoteSource,
   decodeAquaRevertReason,
+  explainAquaReason,
   type AquaOrder,
   type AquaReadClient,
   type LiveAquaQuoteSourceConfig,
@@ -548,5 +549,33 @@ describe("fixture Aqua quote source", () => {
 
     expect(quote.gasUnits).toBe(AQUA_SWAP_GAS_UNITS);
     expect(quote.gasCostInOutputToken).toBeNull();
+  });
+});
+
+describe("explainAquaReason", () => {
+  it("turns a guard revert into an actionable message without losing the error name", () => {
+    // The judge-facing case: someone swaps a round 1 WBTC, trips the maker's
+    // per-trade cap, and previously saw only `VortexMaxTradeExceeded`.
+    const explained = explainAquaReason("VortexMaxTradeExceeded");
+    expect(explained).toContain("VortexMaxTradeExceeded");
+    expect(explained).toContain("try a smaller amount");
+  });
+
+  it("explains every guard a taker can trip", () => {
+    for (const name of [
+      "VortexMaxTradeExceeded",
+      "VortexInventoryBoundBreached",
+      "VortexMakerNotCovered",
+      "VortexStaleOracle",
+      "VortexOracleSpreadTooWide",
+    ]) {
+      expect(explainAquaReason(name)).not.toBe(name);
+      expect(explainAquaReason(name).startsWith(`${name}: `)).toBe(true);
+    }
+  });
+
+  it("passes an unknown reason through untouched rather than swallowing it", () => {
+    expect(explainAquaReason("AQUA_QUOTE_REVERTED")).toBe("AQUA_QUOTE_REVERTED");
+    expect(explainAquaReason("SomethingNew")).toBe("SomethingNew");
   });
 });

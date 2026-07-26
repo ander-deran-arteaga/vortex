@@ -151,6 +151,38 @@ export function decodeAquaRevertReason(
 }
 
 /**
+ * Plain-English gloss for the guards a taker can actually trip.
+ *
+ * The raw custom-error name is kept alongside this — it is what a developer
+ * greps for — but a bare `VortexMaxTradeExceeded` tells someone trying to swap
+ * a round number nothing about what to do next. Each of these is a maker
+ * safety rule doing its job, so the message explains the rule rather than
+ * apologising for it.
+ */
+const AQUA_REASON_EXPLANATION: Readonly<Record<string, string>> = {
+  VortexMaxTradeExceeded:
+    "the trade is larger than the maker's per-trade limit — try a smaller amount",
+  VortexInventoryBoundBreached:
+    "the trade would push the maker's inventory outside its allowed band — try a smaller amount",
+  VortexMakerNotCovered:
+    "the maker cannot currently settle this size (wallet balance or Aqua allowance is short)",
+  VortexStaleOracle:
+    "the maker's reference price is stale, so quoting is refused until it refreshes",
+  VortexOracleSpreadTooWide:
+    "the maker's reference price has an implausibly wide spread, so quoting is refused",
+};
+
+/**
+ * `VortexMaxTradeExceeded` on its own is a fact; "…— try a smaller amount" is
+ * a next step. Returns the raw name when we have no gloss for it, so nothing
+ * is ever swallowed.
+ */
+export function explainAquaReason(reason: string): string {
+  const explanation = AQUA_REASON_EXPLANATION[reason];
+  return explanation === undefined ? reason : `${reason}: ${explanation}`;
+}
+
+/**
  * Live Aqua leg: the lens supplies the fee breakdown and strategy health, the
  * router supplies the amounts that settlement would actually produce.
  * Never throws — an unreachable or reverting strategy comes back as
