@@ -142,6 +142,20 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * The chain the API serves. Quoting reads this rather than the wallet, so a
+ * stub that answers every URL with a quote body would leave the page with no
+ * chain to price on.
+ */
+function configBody() {
+  return {
+    chainId: 31337,
+    tokens: [],
+    contracts: {},
+    features: { growEnabled: true, demoMode: true },
+  };
+}
+
 /** A schema-valid live quote: 1 WBTC in, Aqua winning on net output. */
 function liveQuoteBody() {
   return {
@@ -268,7 +282,12 @@ describe("swap page placeholder notice", () => {
   });
 
   it("does not show the placeholder notice while quotes are succeeding", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => json(liveQuoteBody())));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) =>
+        String(input).includes("/config") ? json(configBody()) : json(liveQuoteBody()),
+      ),
+    );
 
     await quoteOnce();
 
@@ -294,6 +313,9 @@ describe("swap page placeholder notice", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const url = String(input);
+        if (url.includes("/config")) {
+          return json(configBody());
+        }
         if (url.includes("/quotes/exchange")) {
           return json(liveQuoteBody());
         }

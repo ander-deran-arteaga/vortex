@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useAccount } from "wagmi";
-import { useConfig } from "@/hooks/useVortexQueries";
+import {
+  useConfig,
+  useResolveServerChainId,
+  useServerChainId,
+} from "@/hooks/useVortexQueries";
 import { resolveTokens } from "@/lib/tokens";
 import { USDC, WBTC, type ExchangeQuoteResponse } from "@vortex/shared";
 import { ApiContractError, ApiRequestError, fetchExchangeQuote } from "@/lib/api";
@@ -17,7 +21,6 @@ import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import { secondsUntil } from "@/lib/swap-selection";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const LOCAL_FORK_CHAIN_ID = 31337;
 
 /**
  * The API's own code, verbatim, in front of its message. Seeing
@@ -58,6 +61,9 @@ export function useSwapFlow() {
   // are only correct on Arbitrum One itself.
   const config = useConfig();
   const tokens = resolveTokens(config.data?.data);
+  // Authoritative, and deliberately not the wallet's chain: see useServerChainId.
+  const serverChainId = useServerChainId();
+  const resolveServerChainId = useResolveServerChainId();
 
   // Every in-flight quote carries a sequence number. A response whose sequence
   // is stale (the user re-quoted, or reset) is dropped instead of overwriting
@@ -99,7 +105,7 @@ export function useSwapFlow() {
       try {
         const result = await fetchExchangeQuote(
           {
-            chainId: chain?.id === 42161 ? 42161 : LOCAL_FORK_CHAIN_ID,
+            chainId: await resolveServerChainId(),
             strategyHash: STRATEGY_HASHES.swap,
             tokenIn: tokens.wbtc.address,
             tokenOut: tokens.usdc.address,
@@ -132,7 +138,7 @@ export function useSwapFlow() {
         });
       }
     },
-    [address, chain?.id, dispatchIfAllowed, tokens.wbtc.address, tokens.usdc.address],
+    [address, resolveServerChainId, dispatchIfAllowed, tokens.wbtc.address, tokens.usdc.address],
   );
 
   // Countdown starts only after mount, so the server never renders a
@@ -191,7 +197,10 @@ export function useSwapFlow() {
     reset,
     dispatch,
     isConnected: Boolean(address),
+    /** The wallet's chain. Only relevant when a transaction is broadcast. */
     chainId: chain?.id,
+    /** The chain quotes are priced on, from the API. */
+    serverChainId,
     // Exposed so the page reads balances against the same token addresses the
     // quote was requested with, rather than resolving them a second time.
     tokens,

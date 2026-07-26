@@ -11,7 +11,7 @@ import {
 } from "@/components/maker/strategy-form";
 import { FixtureNotice } from "@/components/source-badge";
 import { Action, Page, PageHead, Panel, StatusMark } from "@/components/ui/primitives";
-import { useConfig, useStrategyHealth } from "@/hooks/useVortexQueries";
+import { useConfig, useServerChainId, useStrategyHealth } from "@/hooks/useVortexQueries";
 import { resolveTokens } from "@/lib/tokens";
 import { ApiRequestError } from "@/lib/api";
 import { ERC20_APPROVE_ABI, asEvmAddress } from "@/lib/erc20";
@@ -93,7 +93,11 @@ function useApproval() {
 export function MakerClient() {
   const { isConnected, chain } = useAccount();
   const { switchChain, isPending: switchPending } = useSwitchChain();
-  const wrongChain = isConnected && chain !== undefined && !SUPPORTED_CHAIN_IDS.includes(chain.id);
+  // Approvals are transactions, so the wallet has to be on the chain this API
+  // serves. That chain comes from the API, never from the wallet.
+  const serverChainId = useServerChainId();
+  const wrongChain =
+    isConnected && chain !== undefined && serverChainId !== undefined && chain.id !== serverChainId;
 
   // The resolved hashes, not the fixtures: a real deployment must be read
   // through the hash the demo seeding produced. `fetchStrategyHealth` only
@@ -252,16 +256,21 @@ export function MakerClient() {
           ) : null}
 
           {wrongChain ? (
-            <Notice tone="warn" lead="Unsupported network.">
-              Vortex runs on Arbitrum One and the local Arbitrum fork. Approvals
-              stay disabled until your wallet is on one of them.
+            <Notice tone="warn" lead="Wrong network.">
+              This API serves chain{" "}
+              <span className="num text-say-1">{serverChainId}</span>. Approvals
+              stay disabled until your wallet is on it.
               <span className="mt-3 block">
                 <Action
-                  onClick={() => switchChain({ chainId: 42161 })}
+                  onClick={() => {
+                    if (serverChainId !== undefined) {
+                      switchChain({ chainId: serverChainId });
+                    }
+                  }}
                   disabled={switchPending}
                   busy={switchPending}
                 >
-                  {switchPending ? "Switching…" : "Switch to Arbitrum One"}
+                  {switchPending ? "Switching…" : `Switch to chain ${serverChainId}`}
                 </Action>
               </span>
             </Notice>

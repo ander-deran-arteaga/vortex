@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { useAccount } from "wagmi";
 import type { GrowOpportunity, GrowPrepareResponse } from "@vortex/shared";
+import { useResolveServerChainId, useServerChainId } from "@/hooks/useVortexQueries";
 import {
   ApiContractError,
   ApiRequestError,
@@ -19,20 +19,6 @@ import {
 } from "@/lib/machines/growMachine";
 import { STRATEGY_HASHES } from "@/lib/strategy-config";
 import { secondsUntil } from "@/lib/swap-selection";
-
-const LOCAL_FORK_CHAIN_ID = 31337 as const;
-const ARBITRUM_CHAIN_ID = 42161 as const;
-
-/**
- * Which chain the scan, the prepare and the eventual broadcast all target.
- * Shared with `useGrowExecution` so the transaction is simulated on the same
- * chain it was priced on.
- */
-export function growChainId(
-  walletChainId: number | undefined,
-): typeof ARBITRUM_CHAIN_ID | typeof LOCAL_FORK_CHAIN_ID {
-  return walletChainId === ARBITRUM_CHAIN_ID ? ARBITRUM_CHAIN_ID : LOCAL_FORK_CHAIN_ID;
-}
 
 /**
  * The API's own code, verbatim, in front of its message — `GROW_UNAVAILABLE`,
@@ -60,8 +46,10 @@ export function useGrowFlow() {
   const [principalAmount, setPrincipalAmount] = useState<bigint | null>(null);
   const [expiredByTimeout, setExpiredByTimeout] = useState(false);
 
-  const { chain } = useAccount();
-  const chainId = growChainId(chain?.id);
+  // The scan is priced by the server, so the server names the chain. The
+  // wallet's chain is checked only where the cycle is broadcast.
+  const chainId = useServerChainId();
+  const resolveChainId = useResolveServerChainId();
   const sequenceRef = useRef(0);
   const snapshotRef = useRef(snapshot);
 
@@ -110,7 +98,7 @@ export function useGrowFlow() {
       try {
         const result = await scanGrowOpportunity(
           {
-            chainId,
+            chainId: await resolveChainId(),
             // The real seeded strategy when the environment names it; the
             // fixture placeholder otherwise, which a live API rejects with
             // STRATEGY_NOT_FOUND rather than pricing something that does not
@@ -148,7 +136,7 @@ export function useGrowFlow() {
         });
       }
     },
-    [chainId, dispatchIfAllowed],
+    [resolveChainId, dispatchIfAllowed],
   );
 
   const scan = useCallback(

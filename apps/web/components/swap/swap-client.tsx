@@ -2,8 +2,9 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { erc20Abi } from "viem";
-import { useAccount, useReadContract, useSwitchChain } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { WBTC } from "@vortex/shared";
+import { ChainNotice } from "@/components/chain-notice";
 import { FixtureNotice } from "@/components/source-badge";
 import { QuoteComparison } from "@/components/swap/quote-comparison";
 import { SwapForm } from "@/components/swap/swap-form";
@@ -14,8 +15,6 @@ import { useSwapFlow } from "@/hooks/useSwapFlow";
 import { parseTokenAmount, truncateAddress } from "@/lib/format";
 import type { SwapState } from "@/lib/machines/swapMachine";
 import { STRATEGY_HASHES } from "@/lib/strategy-config";
-
-const SUPPORTED_CHAIN_IDS = [42161, 31337];
 
 /** What the user is waiting on, per machine state. */
 const STEP_COPY: Record<SwapState, string | null> = {
@@ -151,6 +150,7 @@ export function SwapClient() {
     reset,
     dispatch,
     tokens,
+    serverChainId,
   } = useSwapFlow();
   const { execute, approve, approvalNeed } = useSwapExecution(dispatch);
   const { address, chain, isConnected } = useAccount();
@@ -164,7 +164,6 @@ export function SwapClient() {
     args: address === undefined ? undefined : [address],
     query: { enabled: address !== undefined },
   });
-  const { switchChain, isPending: switchPending } = useSwitchChain();
 
   const parsedAmount = useMemo(() => {
     if (amountInput.trim() === "") {
@@ -177,7 +176,9 @@ export function SwapClient() {
     }
   }, [amountInput]);
 
-  const wrongChain = isConnected && chain !== undefined && !SUPPORTED_CHAIN_IDS.includes(chain.id);
+  // Executing on a chain the quote was not priced on is the only real block.
+  const wrongChain =
+    isConnected && chain !== undefined && serverChainId !== undefined && chain.id !== serverChainId;
   const quoting = snapshot.state === "FETCHING_QUOTE";
   const expired = snapshot.state === "EXPIRED" || secondsRemaining === 0;
   const stepMessage = STEP_COPY[snapshot.state];
@@ -288,21 +289,7 @@ export function SwapClient() {
             </p>
           ) : null}
 
-          {wrongChain ? (
-            <Caution>
-              <p className="text-sm leading-relaxed text-say-2">
-                Your wallet is on an unsupported network. Vortex runs on
-                Arbitrum One and the local Arbitrum fork.
-              </p>
-              <CautionAction
-                onClick={() => switchChain({ chainId: 42161 })}
-                disabled={switchPending}
-                busy={switchPending}
-              >
-                {switchPending ? "Switching…" : "Switch to Arbitrum One"}
-              </CautionAction>
-            </Caution>
-          ) : null}
+          <ChainNotice serverChainId={serverChainId} />
         </div>
 
         <div className="space-y-6">

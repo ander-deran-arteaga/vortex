@@ -11,7 +11,7 @@ import {
 } from "@vortex/shared";
 import { ApiRequestError, ApiUnavailableError, apiRequest } from "@/lib/api";
 import type { GrowEvent } from "@/lib/machines/growMachine";
-import { growChainId } from "@/hooks/useGrowFlow";
+import { useServerChainId } from "@/hooks/useVortexQueries";
 
 /**
  * The one event the cycle emits. Hand-written (matching
@@ -118,11 +118,12 @@ function apiErrorText(error: unknown, fallback: string): string {
  */
 export function useGrowExecution(dispatch: (event: GrowEvent) => void) {
   const { address, chain } = useAccount();
-  const chainId = growChainId(chain?.id);
+  const walletChainId = chain?.id;
+  const chainId = useServerChainId();
   // Pinned to the chain the scan and prepare targeted. Without the pin an
   // unconnected browser would simulate a local-fork transaction against
   // Arbitrum, which fails for a reason that has nothing to do with the cycle.
-  const publicClient = usePublicClient({ chainId });
+  const publicClient = usePublicClient(chainId === undefined ? {} : { chainId });
   const { sendTransactionAsync } = useSendTransaction();
 
   const [settlement, setSettlement] = useState<GrowSettlement | null>(null);
@@ -297,10 +298,10 @@ export function useGrowExecution(dispatch: (event: GrowEvent) => void) {
           });
           return;
         }
-        if (chain !== undefined && chain.id !== chainId) {
+        if (walletChainId !== undefined && walletChainId !== chainId) {
           dispatch({
             type: "EXECUTION_FAILURE",
-            reason: `SOLVER_UNAVAILABLE: the prepared transaction targets chain ${chainId}, but the wallet is connected to chain ${chain.id}. Switch networks and prepare the route again. Nothing was broadcast.`,
+            reason: `SOLVER_UNAVAILABLE: the prepared transaction targets chain ${chainId}, but the wallet is connected to chain ${walletChainId}. Switch networks and prepare the route again. Nothing was broadcast.`,
           });
           return;
         }
@@ -408,7 +409,7 @@ export function useGrowExecution(dispatch: (event: GrowEvent) => void) {
         });
       }
     },
-    [address, chain, chainId, dispatch, publicClient, readMakerBalances, sendTransactionAsync],
+    [address, walletChainId, chainId, dispatch, publicClient, readMakerBalances, sendTransactionAsync],
   );
 
   return { execute, resetExecution, settlement, mode, simulationNote, chainId };

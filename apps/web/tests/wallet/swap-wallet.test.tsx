@@ -64,7 +64,10 @@ describe("swap page wallet handling", () => {
     expect(screen.getByText("Fixture fallback response")).toBeInTheDocument();
   });
 
-  it("prompts to switch when the wallet is on an unsupported chain", async () => {
+  // The chain a quote is priced on comes from the API, never from the wallet.
+  // The wallet's chain only has to match when a transaction is broadcast, so
+  // the prompt names the chain the API serves rather than a hardcoded one.
+  it("prompts to switch to the chain the API serves", async () => {
     const user = userEvent.setup();
     setWallet({
       isConnected: true,
@@ -74,9 +77,11 @@ describe("swap page wallet handling", () => {
     });
     await renderSwap();
 
-    expect(screen.getByText(/unsupported network/i)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /switch to arbitrum one/i }));
-    expect(switchChainSpy).toHaveBeenCalledWith({ chainId: 42161 });
+    await screen.findByText(/your wallet is on chain 1/i);
+    await user.click(
+      screen.getByRole("button", { name: /switch to the local arbitrum fork/i }),
+    );
+    expect(switchChainSpy).toHaveBeenCalledWith({ chainId: 31337 });
   });
 
   it("blocks execution on the wrong chain even with a quote on screen", async () => {
