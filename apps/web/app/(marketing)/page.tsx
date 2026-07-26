@@ -1,3 +1,4 @@
+import { Layers, Lock, Radio, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { FalseChoice } from "@/components/marketing/false-choice";
 import { GrowFlowSection } from "@/components/marketing/grow-flow/grow-flow-section";
@@ -76,15 +77,17 @@ const GUARANTEES = [
 /* ──────────────────────────────── built on ────────────────────────────────── */
 
 const FOUNDATIONS = [
-  { name: "1inch Aqua", line: "Liquidity without custody." },
-  { name: "SwapVM", line: "Strategy enforced onchain." },
+  { name: "1inch Aqua", line: "Liquidity without custody.", Icon: Lock },
+  { name: "SwapVM", line: "Strategy enforced onchain.", Icon: ShieldCheck },
   {
     name: "Uniswap v4 & Trading API",
-    line: "Depth, hooks, and the benchmark every quote must beat.",
+    line: "Depth, hooks and the benchmark every quote must beat.",
+    Icon: Layers,
   },
   {
     name: "Pull-oracle-ready reference price",
     line: "Freshness enforced per swap.",
+    Icon: Radio,
   },
 ] as const;
 
@@ -141,12 +144,25 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <p className="mt-16 text-sm text-say-3">
-            Built on 1inch Aqua
-            <span className="mx-2">·</span>SwapVM
-            <span className="mx-2">·</span>Uniswap v4 &amp; Trading API
-          </p>
         </div>
+      </Section>
+
+      {/*
+        The trust strip sits directly under the hero: what this is built on is
+        the first question a reader has, and the answer belongs before the
+        argument rather than after it.
+      */}
+      <Section id="built-on" className="pt-0 sm:pt-0">
+        <dl className="grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-4">
+          {FOUNDATIONS.map(({ name, line, Icon }) => (
+            <div key={name}>
+              {/* The mark sits bare on the surface: no tile, no chip. */}
+              <Icon aria-hidden="true" className="size-5 text-cu" strokeWidth={1.5} />
+              <dt className="mt-3 text-[15px] text-say-1">{name}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-say-2">{line}</dd>
+            </div>
+          ))}
+        </dl>
       </Section>
 
       {/* ──────────────────────────── 2 · the leak ────────────────────────── */}
@@ -333,23 +349,6 @@ export default function LandingPage() {
         </div>
 
         <GrowFlowSection />
-      </Section>
-
-      {/* ───────────────────────────── 7 · built on ───────────────────────── */}
-      <Section id="built-on">
-        <h2 className="text-[clamp(1.5rem,3vw,2.25rem)] leading-[1.1] text-say-1">
-          Built on
-        </h2>
-        <dl className="mt-8 grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
-          {FOUNDATIONS.map((foundation) => (
-            <div key={foundation.name}>
-              <dt className="text-[15px] text-say-1">{foundation.name}</dt>
-              <dd className="mt-1.5 text-sm leading-relaxed text-say-2">
-                {foundation.line}
-              </dd>
-            </div>
-          ))}
-        </dl>
       </Section>
 
       {/* ───────────────────────────── 8 · closing ────────────────────────── */}
