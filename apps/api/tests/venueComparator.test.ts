@@ -32,6 +32,8 @@ const STRATEGY_HASH = `0x${"11".repeat(32)}` as Hex;
 
 const uniQuote = (overrides: Partial<UniswapQuote> = {}): UniswapQuote => ({
   txFailureReasons: [],
+  quotedOnChainId: 42161,
+  executable: true,
   amountIn: AMOUNT_IN,
   amountOut: UNI_OUT,
   minimumAmountOut: UNI_MIN,

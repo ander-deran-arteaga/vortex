@@ -83,6 +83,14 @@ export const zUniswapComparison = z.object({
   estimatedGasUsd: z.string().nullable(),
   netAmountOut: zAmount,
   requestId: z.string().optional(),
+  /**
+   * The chain this quote was PRICED on, which is not always the chain the
+   * trade settles on. The Trade API cannot quote a local dev chain, so a
+   * 31337 comparison is priced against the real pair on Arbitrum One. The API
+   * always sends this on a live quote; render it rather than inferring the
+   * chain from anywhere else.
+   */
+  quotedOnChainId: zChainId.optional(),
 });
 export type UniswapComparison = z.infer<typeof zUniswapComparison>;
 
@@ -104,6 +112,13 @@ export const zUniswapExecution = z.object({
   quoteSessionId: z.string(),
   permitData: z.unknown().nullable(),
   approvalRequired: z.boolean(),
+  /**
+   * False when the quote was priced on another chain and therefore cannot be
+   * built or broadcast here. The honest surface is then "Uniswap is cheaper —
+   * here is the quote and its requestId", never a build button. Absent means
+   * executable, for older payloads.
+   */
+  executable: z.boolean().optional(),
 });
 export type UniswapExecution = z.infer<typeof zUniswapExecution>;
 

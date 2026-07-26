@@ -4,7 +4,10 @@ import type {
   QuoteSource,
   UniswapComparison,
 } from "@vortex/shared";
-import type { Hex } from "viem";
+import { USDC as USDC_TOKEN, WBTC as WBTC_TOKEN } from "@vortex/shared";
+import type { Address, Hex } from "viem";
+
+import { symbolForAddress } from "../clients/tokenSymbols";
 
 import { explainAquaReason } from "../clients/liveAquaQuoteSource";
 import {
@@ -31,6 +34,62 @@ export interface ExchangeQuoteDeps {
   uniswapClient: UniswapApiClient | null;
   sessions: QuoteSessionStore<ExchangeSessionPayload>;
   comparatorOptions?: ComparatorOptions;
+  /** Chain-aware symbol lookup, used to map local mocks onto real tokens. */
+  resolveSymbol?: (address: string) => string;
+}
+
+/**
+ * The only chain the Trade API can price for us. A local dev chain holds mock
+ * tokens at addresses Uniswap has never seen, so its comparison leg is priced
+ * against the REAL pair here — a genuine live quote with a real requestId,
+ * labelled as priced elsewhere and never offered as executable locally.
+ */
+export const REFERENCE_CHAIN_ID = 42161;
+
+const CANONICAL_BY_SYMBOL: Record<string, Address> = {
+  WBTC: WBTC_TOKEN.address,
+  USDC: USDC_TOKEN.address,
+};
+
+interface ReferenceQuoteTarget {
+  params: QuoteRequestParams;
+  quotedOnChainId: number;
+  executable: boolean;
+}
+
+/**
+ * Where to ask the Trade API for this trade. On a chain it can quote, that is
+ * the trade itself. Otherwise the same size on the same *assets* at their real
+ * addresses — the mocks share WBTC/USDC decimals, so amounts carry over with
+ * no conversion. Returns null when the pair has no real counterpart.
+ */
+export function referenceQuoteTarget(
+  params: QuoteRequestParams,
+  resolveSymbol: (address: string) => string,
+): ReferenceQuoteTarget | null {
+  if (params.chainId === REFERENCE_CHAIN_ID) {
+    return {
+      params,
+      quotedOnChainId: REFERENCE_CHAIN_ID,
+      executable: true,
+    };
+  }
+
+  const tokenIn = CANONICAL_BY_SYMBOL[resolveSymbol(params.tokenIn)];
+  const tokenOut = CANONICAL_BY_SYMBOL[resolveSymbol(params.tokenOut)];
+  if (!tokenIn || !tokenOut) return null;
+
+  return {
+    params: {
+      ...params,
+      chainId: REFERENCE_CHAIN_ID,
+      tokenIn,
+      tokenOut,
+    },
+    quotedOnChainId: REFERENCE_CHAIN_ID,
+    // Priced on Arbitrum One, settled locally: a build here would be a lie.
+    executable: false,
+  };
 }
 
 export interface ExchangeQuoteParams extends QuoteRequestParams {
@@ -56,10 +115,17 @@ async function safely<T>(load: () => Promise<T>): Promise<T | null> {
 async function loadUniswapQuote(
   client: UniswapApiClient | null,
   params: QuoteRequestParams,
+  resolveSymbol: (address: string) => string,
 ): Promise<UniswapQuote | null> {
+  // No key, or no real counterpart for this pair: the honest empty state.
   if (!client) return null;
+  const target = referenceQuoteTarget(params, resolveSymbol);
+  if (!target) return null;
+
   return safely(async () => {
-    const quote = await client.getClassicQuote(quoteParamsFromRequest(params));
+    const quote = await client.getClassicQuote(
+      quoteParamsFromRequest(target.params),
+    );
     const gasFeeQuote = quote.quote.gasFeeQuote;
     return {
       amountIn: BigInt(quote.quote.input.amount),
@@ -79,6 +145,8 @@ async function loadUniswapQuote(
       gasFeeUSD: quote.quote.gasFeeUSD ?? null,
       priceImpact: quote.quote.priceImpact ?? null,
       txFailureReasons: quote.quote.txFailureReasons ?? [],
+      quotedOnChainId: target.quotedOnChainId,
+      executable: target.executable,
     } satisfies UniswapQuote;
   });
 }
@@ -139,6 +207,7 @@ function toUniswapComparison(
     estimatedGasUsd: quote.gasFeeUSD ?? null,
     netAmountOut: (compared?.netAmountOut ?? 0n).toString(),
     requestId: quote.requestId,
+    quotedOnChainId: quote.quotedOnChainId as 42161 | 31337,
   };
 }
 
@@ -153,7 +222,11 @@ export async function quoteExchange(
 ): Promise<ExchangeQuoteResponse> {
   const [aquaQuote, uniswapQuote] = await Promise.all([
     safely(() => deps.aquaSource.quote(params)),
-    loadUniswapQuote(deps.uniswapClient, params),
+    loadUniswapQuote(
+      deps.uniswapClient,
+      params,
+      deps.resolveSymbol ?? symbolForAddress,
+    ),
   ]);
 
   // A quote that exists but cannot settle is not a venue. Routing to one would
@@ -217,6 +290,7 @@ export async function quoteExchange(
       : {
           kind: "UNISWAP_API",
           quoteSessionId: session.id,
+          executable: uniswapQuote?.executable ?? true,
           permitData: uniswapQuote?.permitData ?? null,
           approvalRequired: uniswapQuote?.approvalRequired ?? true,
         };

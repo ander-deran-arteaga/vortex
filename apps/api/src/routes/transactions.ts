@@ -161,6 +161,24 @@ export function registerTransactionRoutes(
       });
     }
 
+    // Priced on another chain: the numbers are a real live quote and worth
+    // showing, but building a transaction from them here would hand the taker
+    // calldata for contracts that do not exist on this chain.
+    if (!uniswap.executable) {
+      return reply.status(409).send({
+        error: {
+          code: "UNISWAP_QUOTE_NOT_EXECUTABLE_HERE",
+          message:
+            `this quote was priced on chain ${uniswap.quotedOnChainId} for ` +
+            `comparison, while the server settles on chain ${request.chainId}. ` +
+            `It is a genuine live quote (requestId ${uniswap.requestId}) and ` +
+            `may be shown as the cheaper venue, but it cannot be executed ` +
+            `here. Execute the Aqua leg, or point the server at chain ` +
+            `${uniswap.quotedOnChainId} to trade it.`,
+        },
+      });
+    }
+
     const client = ctx.exchange.uniswapClient;
     if (!client) {
       return reply.status(503).send({

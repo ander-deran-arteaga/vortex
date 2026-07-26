@@ -890,3 +890,181 @@ describe("gas is priced honestly, never fabricated", () => {
     }
   });
 });
+
+/**
+ * MASTER Addendum 25 §B. The Trade API cannot quote a local dev chain — its
+ * tokens are mocks at addresses Uniswap has never seen — which removed best
+ * execution from the demo entirely. The comparison leg is now a REAL live
+ * quote for the same size on the real pair on Arbitrum One, labelled as such
+ * and never offered as executable locally.
+ */
+describe("reference-priced Uniswap leg on a local chain", () => {
+  const LOCAL_WBTC = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512";
+  const LOCAL_USDC = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
+
+  const localQuoteBody = {
+    chainId: 31337,
+    strategyHash: STRATEGY,
+    tokenIn: LOCAL_WBTC,
+    tokenOut: LOCAL_USDC,
+    // Matches the canned stub quote, which is a captured 0.01 WBTC response.
+    amountIn: "1000000",
+    taker: TAKER,
+    slippageBps: 30,
+  };
+
+  /** Records what the client was actually asked to quote. */
+  function spyingClient() {
+    const seen: { chainId: number; tokenIn: string; tokenOut: string; amount: bigint }[] =
+      [];
+    const base = stubUniswapClient();
+    return {
+      seen,
+      client: {
+        ...base,
+        getClassicQuote: async (params: {
+          chainId: number;
+          tokenIn: string;
+          tokenOut: string;
+          amount: bigint;
+        }) => {
+          seen.push({
+            chainId: params.chainId,
+            tokenIn: params.tokenIn,
+            tokenOut: params.tokenOut,
+            amount: params.amount,
+          });
+          return base.getClassicQuote(params as never);
+        },
+      } as never,
+    };
+  }
+
+  const localServer = (uniswapClient: unknown) =>
+    buildServer(
+      { CHAIN_ID: "31337" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_COMPETITIVE_FIXTURE,
+          midPriceE18: 64_300n * 10n ** 18n,
+          knownStrategyHash: STRATEGY as `0x${string}`,
+          baseToken: { address: LOCAL_WBTC as `0x${string}`, decimals: 8 },
+          quoteToken: { address: LOCAL_USDC as `0x${string}`, decimals: 6 },
+        }),
+        uniswapClient: uniswapClient as never,
+        executions: createExecutionStore({
+          dir: "/evidence",
+          fs: memoryFs(),
+          now: () => 1_753_000_000_000,
+        }),
+      },
+    );
+
+  const postLocal = (server: BuiltServer) =>
+    server.app.inject({
+      method: "POST",
+      url: API_ROUTES.exchangeQuote,
+      payload: localQuoteBody,
+    });
+
+  it("prices the real pair on Arbitrum One at the same size", async () => {
+    const { seen, client } = spyingClient();
+    built = localServer(client);
+    await postLocal(built);
+
+    expect(seen).toHaveLength(1);
+    // Same size, real chain, real token addresses — not the local mocks.
+    expect(seen[0]!.chainId).toBe(42161);
+    expect(seen[0]!.amount).toBe(1_000_000n);
+    expect(seen[0]!.tokenIn.toLowerCase()).toBe(WBTC.toLowerCase());
+    expect(seen[0]!.tokenOut.toLowerCase()).toBe(USDC.toLowerCase());
+  });
+
+  it("labels the leg with the chain it was priced on", async () => {
+    built = localServer(stubUniswapClient());
+    const body = zExchangeQuoteResponse.parse((await postLocal(built)).json());
+
+    const uniswap = body.comparison.uniswap!;
+    // A real live quote, so `source` stays "live" — the chain is the extra fact.
+    expect(uniswap.source).toBe("live");
+    expect(uniswap.quotedOnChainId).toBe(42161);
+    expect(uniswap.requestId).toBeTruthy();
+  });
+
+  it("marks the Uniswap execution as not executable on the local chain", async () => {
+    // Aqua priced far worse, so Uniswap wins and the execution payload is the
+    // one a UI would act on.
+    built = buildServer(
+      { CHAIN_ID: "31337" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_UNCOMPETITIVE_FIXTURE,
+          midPriceE18: 60_000n * 10n ** 18n,
+          knownStrategyHash: STRATEGY as `0x${string}`,
+          baseToken: { address: LOCAL_WBTC as `0x${string}`, decimals: 8 },
+          quoteToken: { address: LOCAL_USDC as `0x${string}`, decimals: 6 },
+        }),
+        uniswapClient: stubUniswapClient(),
+      },
+    );
+    const body = zExchangeQuoteResponse.parse((await postLocal(built)).json());
+
+    expect(body.selectedVenue).toBe("UNISWAP");
+    expect(body.execution.kind).toBe("UNISWAP_API");
+    if (body.execution.kind !== "UNISWAP_API") return;
+    expect(body.execution.executable).toBe(false);
+  });
+
+  it("refuses to build a transaction from a quote priced elsewhere", async () => {
+    built = buildServer(
+      { CHAIN_ID: "31337" },
+      {
+        envSource: {},
+        aquaSource: createFixtureAquaQuoteSource({
+          ...AQUA_UNCOMPETITIVE_FIXTURE,
+          midPriceE18: 60_000n * 10n ** 18n,
+          knownStrategyHash: STRATEGY as `0x${string}`,
+          baseToken: { address: LOCAL_WBTC as `0x${string}`, decimals: 8 },
+          quoteToken: { address: LOCAL_USDC as `0x${string}`, decimals: 6 },
+        }),
+        uniswapClient: stubUniswapClient(),
+      },
+    );
+    const quote = zExchangeQuoteResponse.parse((await postLocal(built)).json());
+
+    const res = await built.app.inject({
+      method: "POST",
+      url: API_ROUTES.transactionsUniswap,
+      payload: { quoteSessionId: quote.quoteSessionId },
+    });
+
+    expect(res.statusCode).toBe(409);
+    const error = zApiError.parse(res.json()).error;
+    expect(error.code).toBe("UNISWAP_QUOTE_NOT_EXECUTABLE_HERE");
+    // The message must carry the requestId — it is what the UI shows instead.
+    expect(error.message).toContain("requestId");
+  });
+
+  it("still quotes the trade directly when the chain IS quotable", async () => {
+    const { seen, client } = spyingClient();
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE, client as never);
+    await postQuote(built);
+
+    expect(seen[0]!.chainId).toBe(42161);
+    // On 42161 the request is the trade itself, so the tokens are unchanged.
+    expect(seen[0]!.tokenIn.toLowerCase()).toBe(WBTC.toLowerCase());
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+    expect(body.comparison.uniswap!.quotedOnChainId).toBe(42161);
+  });
+
+  it("degrades to the honest empty state with no API key", async () => {
+    built = localServer(null);
+    const body = zExchangeQuoteResponse.parse((await postLocal(built)).json());
+
+    // No fabricated leg, no reference quote — nothing was priced.
+    expect(body.comparison.uniswap).toBeNull();
+    expect(body.selectedVenue).toBe("AQUA");
+  });
+});

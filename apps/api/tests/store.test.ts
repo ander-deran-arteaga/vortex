@@ -66,6 +66,8 @@ const STRATEGY_HASH = `0x${"ab".repeat(32)}` as Hex;
 const TX_HASH = `0x${"cd".repeat(32)}`;
 
 const uniswapQuote = (): UniswapQuote => ({
+  quotedOnChainId: 42161,
+  executable: true,
   amountIn: 1_000_000n, // 0.01 WBTC (8 decimals)
   amountOut: 640_148_143n, // 640.148143 USDC (6 decimals)
   minimumAmountOut: 638_227_698n,

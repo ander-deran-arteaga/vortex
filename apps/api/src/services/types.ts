@@ -42,6 +42,13 @@ export interface UniswapQuote extends VenueQuote {
   gasFeeUSD: string | null;
   priceImpact: number | null;
   /**
+   * Chain the quote was PRICED on. Differs from the settlement chain when a
+   * local dev chain is compared against the real pair on Arbitrum One.
+   */
+  quotedOnChainId: number;
+  /** False when priced on another chain, so it cannot be built here. */
+  executable: boolean;
+  /**
    * Non-empty means Uniswap's own auto-simulation of this route failed, so the
    * quote must not be routed to however good its numbers look.
    */

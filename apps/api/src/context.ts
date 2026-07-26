@@ -199,6 +199,7 @@ export function buildContext(
         }),
       uniswapClient,
       sessions: deps.sessions ?? createQuoteSessionStore<ExchangeSessionPayload>(),
+      resolveSymbol,
     },
     executions:
       deps.executions ??
