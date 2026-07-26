@@ -59,7 +59,15 @@ export interface LiveAquaQuoteSourceConfig {
   resolveOrder: (strategyHash: Hex) => Promise<AquaOrder> | AquaOrder;
   /** Coverage below this makes the quote non-executable. Default: fully covered. */
   minimumCoverageBps?: number;
-  /** Commercial-fee rebate previewed in the breakdown; 0 unless one is signed. */
+  /**
+   * Commercial-fee rebate previewed in the breakdown.
+   *
+   * MVP: this is STATIC CONFIGURATION and defaults to 0. Nothing derives it
+   * from the competitor's quote and no `VortexQuoteAuthorization` is signed,
+   * so no rebate is ever applied on the live path. The onchain mechanism
+   * exists and is tested; the backend derivation is a documented cut — see
+   * docs/economic-model.md, "Competitive rebate — CUT for the MVP".
+   */
   rebateBps?: number;
   /** Taker traits blob forwarded to `router.quote`; empty means "no rebate". */
   takerTraitsAndData?: Hex;

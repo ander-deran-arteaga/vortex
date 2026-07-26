@@ -91,6 +91,35 @@ construction. A fully compromised backend signer can only give away
 commercial margin, never breach the maker's safety envelope. That property is
 enforced onchain, not here.
 
+### Competitive rebate — CUT for the MVP
+
+The onchain machinery for a per-fill commercial rebate is built, deployed and
+tested: `VortexAquaPricing` verifies a signed `VortexQuoteAuthorization`,
+`instructionsArgs` carries it, nonces are per-taker and consumed on swap only,
+and `test_rebateCannotRemoveSafetyFee` proves that no rebate — however extreme
+— can pierce the safety floor.
+
+**The backend does not derive one.** `rebateBps` is a static configuration
+value defaulting to `0`, and nothing reads the competitor's quote to compute
+it; `competitorQuoteHash` is signed as a field but is never bound to a real
+competitor quote in the live path.
+
+This is a deliberate MVP cut, not an oversight:
+
+- It is a **pricing optimisation, not a capability**. Best execution already
+  works: both venues are quoted, ranked on net output, and the router genuinely
+  routes away from the maker when the maker is worse.
+- The **security property it protects is already evidenced** onchain, so
+  nothing about the safety story depends on the backend half existing.
+- Deriving it means re-quoting through the lens with a computed rebate, signing
+  per-taker with nonce management, and threading it through the taker-traits
+  blob — changes to the one path that currently settles end to end.
+
+**What may be claimed:** inventory-aware pricing, an immutable safety fee floor
+no signer can pierce, and a rebate mechanism that exists and is enforced
+onchain. **What may not:** that Vortex sharpens its quote against an observed
+competitor quote. It does not, today.
+
 ## 3. Vortex Grow — compounding economics (Phase 6/7)
 
 A maker ships WBTC and states "only execute if I end with more WBTC". A cycle
