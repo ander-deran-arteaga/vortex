@@ -126,10 +126,8 @@ export default function LandingPage() {
 
           <div className="mt-10 flex flex-wrap items-start gap-x-14 gap-y-8">
             <p className="max-w-md text-[15px] leading-relaxed text-say-2">
-              Passive AMMs wait for arbitrageurs to correct their price.
-              Proprietary AMMs quote actively, but you must trust whoever sets
-              the quote. Vortex gives makers active pricing with the spread,
-              inventory limits and profit floor enforced onchain.
+              Makers price actively. The spread, inventory limits and profit
+              floor are enforced onchain.
             </p>
 
             <div className="flex flex-wrap items-center gap-x-8 gap-y-4 pt-1">
@@ -158,9 +156,8 @@ export default function LandingPage() {
           Every time a pool price goes stale, someone profits.
         </h2>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-          A passive pool cannot move
-          its own price: it waits to be corrected by an arbitrageur, and pays
-          for the correction.
+          A passive pool waits to be corrected by an arbitrageur, and pays for
+          the correction.
         </p>
         <div className="mt-10">
           <PriceLeak />
@@ -178,8 +175,7 @@ export default function LandingPage() {
         </div>
         <p className="mt-8 max-w-2xl text-[15px] leading-relaxed text-say-2">
           <span className="text-cu">Vortex takes both.</span> The maker&rsquo;s
-          strategy quotes actively; the chain decides whether the quote is
-          allowed.
+          strategy quotes. The chain decides whether the quote is allowed.
         </p>
       </Section>
 
@@ -198,14 +194,14 @@ export default function LandingPage() {
               <div>
                 <dt className="text-sm text-cu">Aqua</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Makers provide liquidity while assets stay in their own
-                  wallets, subscribing to strategies.
+                  Liquidity without custody: assets stay in the maker&rsquo;s
+                  wallet.
                 </dd>
               </div>
               <div>
                 <dt className="text-sm text-cu">Uniswap and the Trading API</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Deep liquidity and network effects, including v4 hooks.
+                  Deep liquidity and v4 hooks.
                 </dd>
               </div>
             </dl>
@@ -218,20 +214,19 @@ export default function LandingPage() {
               <div>
                 <dt className="text-sm text-cu">SwapVM</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Enforces the strategy: spreads, inventory behaviour, the
-                  liquidity curve.
+                  Enforces spreads, inventory behaviour and the curve.
                 </dd>
               </div>
               <div>
                 <dt className="text-sm text-cu">The comparator</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Improves the quote against the leader venue, if the maker stays profitable.
+                  Improves the quote only while the maker profits.
                 </dd>
               </div>
               <div>
                 <dt className="text-sm text-cu">A fresh reference price</dt>
                 <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Chainlink pull oracle, required on every swap, checked before it settles.
+                  Required on every swap, before anything settles.
                 </dd>
               </div>
             </dl>
@@ -254,8 +249,7 @@ export default function LandingPage() {
           The quote signer cannot cross these lines.
         </h2>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-          Each of these is a real check in SwapVM. The names
-          below are the errors they revert with.
+          Real checks in SwapVM, each named by the error it reverts with.
         </p>
 
         <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -271,9 +265,8 @@ export default function LandingPage() {
         </ul>
 
         <p className="mt-6 max-w-2xl text-sm leading-relaxed text-say-3">
-          The reference-price interface is pull-oracle-ready: bid, mid, ask and
-          a timestamp. This hackathon build runs a mock feed, and the freshness
-          checks around it are real and enforced on every swap.
+          Pull-oracle-ready: bid, mid, ask and a timestamp. This build runs a
+          mock feed; the freshness checks around it are real.
         </p>
       </Section>
 
@@ -304,8 +297,7 @@ export default function LandingPage() {
 
             <p className="mt-6 flex-1 text-sm leading-relaxed text-say-2">
               Every Aqua quote is benchmarked against the Uniswap Trading API.
-              Aqua executes only when it wins on net output; otherwise the API
-              builds the transaction.
+              Aqua executes only when it wins on net output.
             </p>
           </article>
 
@@ -334,9 +326,8 @@ export default function LandingPage() {
             </ol>
 
             <p className="mt-6 flex-1 text-sm leading-relaxed text-say-2">
-              A maker authorises an asset such as WBTC. Vortex runs an atomic
-              cycle and it settles only if the maker ends with more of that same
-              asset.
+              An atomic cycle that settles only if the maker ends with more of
+              the same asset.
             </p>
           </article>
         </div>
@@ -369,7 +360,7 @@ export default function LandingPage() {
             inventory, and compounds itself.
           </h2>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-            Without giving unrestricted pricing power to a centralized operator.
+            Without handing pricing power to a centralized operator.
           </p>
           <LaunchApp className="mt-9" />
         </div>
