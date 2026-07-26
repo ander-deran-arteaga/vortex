@@ -3,7 +3,11 @@ import { decimalsFor as decimalsFrom, resolveTokens, type ResolvedTokens } from 
 import { SourceBadge } from "@/components/source-badge";
 import { Panel, StatusMark } from "@/components/ui/primitives";
 import type { DataSource } from "@/lib/api/source";
-import { basisPointsToPercent, formatTokenAmount } from "@/lib/format";
+import {
+  basisPointsToPercent,
+  formatTokenAmount,
+  formatTokenAmountDisplay,
+} from "@/lib/format";
 
 /**
  * WBTC is 8 decimals and USDC is 6 — never assume 18. An unrecognised token
@@ -18,7 +22,14 @@ import { basisPointsToPercent, formatTokenAmount } from "@/lib/format";
 const FALLBACK_TOKENS = resolveTokens();
 
 function amountCell(value: string, decimals: number | undefined): string {
-  return decimals === undefined ? "—" : formatTokenAmount(BigInt(value), decimals);
+  return decimals === undefined
+    ? "—"
+    : formatTokenAmountDisplay(BigInt(value), decimals);
+}
+
+/** The exact figure, always available on hover even when the cell summarises. */
+function exactAmount(value: string, decimals: number | undefined): string | undefined {
+  return decimals === undefined ? undefined : formatTokenAmount(BigInt(value), decimals);
 }
 
 /** Status in type and tone, not in a tinted pill. */
@@ -123,16 +134,24 @@ export function CoveragePanel({
                     {token.symbol}
                   </th>
                   <td className="num py-3.5 pr-6 text-right align-baseline text-[17px] leading-none text-say-1">
-                    {amountCell(token.executableBalance, decimals)}
+                    <span title={exactAmount(token.executableBalance, decimals)}>
+                      {amountCell(token.executableBalance, decimals)}
+                    </span>
                   </td>
                   <td className="num py-3.5 pr-4 text-right align-baseline text-sm text-say-3">
-                    {amountCell(token.virtualBalance, decimals)}
+                    <span title={exactAmount(token.virtualBalance, decimals)}>
+                      {amountCell(token.virtualBalance, decimals)}
+                    </span>
                   </td>
                   <td className="num py-3.5 pr-4 text-right align-baseline text-sm text-say-3">
-                    {amountCell(token.actualBalance, decimals)}
+                    <span title={exactAmount(token.actualBalance, decimals)}>
+                      {amountCell(token.actualBalance, decimals)}
+                    </span>
                   </td>
                   <td className="num py-3.5 text-right align-baseline text-sm text-say-3">
-                    {amountCell(token.aquaAllowance, decimals)}
+                    <span title={exactAmount(token.aquaAllowance, decimals)}>
+                      {amountCell(token.aquaAllowance, decimals)}
+                    </span>
                   </td>
                 </tr>
               );

@@ -60,6 +60,39 @@ export function parseTokenAmount(input: string, decimals: number): bigint {
   );
 }
 
+/**
+ * An unlimited ERC-20 approval, and the mock tokens minted at the same
+ * ceiling, arrive as 2^256-1. Rendering that literally produces a 60-digit
+ * number that blows out any table, so it is named rather than printed: this is
+ * the standard convention and it is more truthful than a wall of digits.
+ */
+export const MAX_UINT256 = (1n << 256n) - 1n;
+
+/** Digits above which a raw amount stops being readable in a cell. */
+const COMPACT_ABOVE_DIGITS = 15;
+
+/**
+ * Display form for a balance or allowance. Exact values are unchanged; only
+ * genuinely unreadable magnitudes are summarised, and callers pass the exact
+ * string through `title` so nothing is hidden.
+ */
+export function formatTokenAmountDisplay(
+  value: bigint,
+  decimals: number,
+  displayDecimals?: number,
+): string {
+  if (value === MAX_UINT256) {
+    return "Unlimited";
+  }
+  const whole = value / 10n ** BigInt(decimals);
+  if (whole.toString().length > COMPACT_ABOVE_DIGITS) {
+    const digits = whole.toString().length;
+    const lead = whole.toString().slice(0, 3);
+    return `~${lead[0]}.${lead.slice(1)} x 10^${digits - 1}`;
+  }
+  return formatTokenAmount(value, decimals, displayDecimals);
+}
+
 export function truncateAddress(address: string): string {
   if (address.length <= 12) {
     return address;
