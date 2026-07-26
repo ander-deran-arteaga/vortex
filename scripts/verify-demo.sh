@@ -64,10 +64,15 @@ stop_by_pid() {
         ss -ltn 2>/dev/null | grep -q ":$p " || break
         sleep 1
       done
-      if ss -ltn 2>/dev/null | grep -q ":$p "; then
+      # SIGKILL, then give the kernel real time to release the socket. anvil in
+      # particular can outlive a short wait, and a surviving chain silently
+      # makes the next "fresh" run not fresh at all.
+      for _ in 1 2 3; do
+        ss -ltn 2>/dev/null | grep -q ":$p " || break
         pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
-        [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null && sleep 2
-      fi
+        [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null
+        sleep 3
+      done
       if ss -ltn 2>/dev/null | grep -q ":$p "; then
         echo "  WARNING: :$p is still held — a new server would silently move to another port"
       else
