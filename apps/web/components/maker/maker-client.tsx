@@ -230,7 +230,7 @@ export function MakerClient() {
     <Page>
       <PageHead
         title="Ship inventory"
-        lead="One inventory backs both Vortex products. Configure the market-making strategy and the compounding strategy, approve what Aqua may pull, and watch coverage as the position works."
+        lead="One inventory backs both products. Approve what Aqua may pull, and watch coverage as the position works."
       />
 
       {hasNotices ? (

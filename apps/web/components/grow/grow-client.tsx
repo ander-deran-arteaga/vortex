@@ -405,7 +405,7 @@ export function GrowClient() {
     <Page>
       <PageHead
         title="Vortex Grow"
-        lead="Only execute when the position ends with more WBTC. A custom Aqua app temporarily pulls maker WBTC, runs one atomic cycle across the Vortex PermAMM and an external venue, then returns principal plus profit."
+        lead="One atomic cycle across two venues. It settles only if the maker ends with more WBTC than it started with."
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}

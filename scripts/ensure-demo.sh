@@ -17,10 +17,18 @@ set -uo pipefail
 # while the API answers STRATEGY_NOT_FOUND. A strategy is Aqua state, not a
 # contract. This makes that state impossible to half-complete.
 #
-# Env: ANVIL_PORT (default 8545), FORK_RPC_URL (Arbitrum fork mode).
+# Env: ANVIL_PORT (default 8545), ANVIL_CHAIN_ID (default 31337),
+#      FORK_RPC_URL (Arbitrum fork mode).
+#
+# A second chain must use a different CHAIN ID, not just a different port: the
+# deploy scripts name their artifacts after `block.chainid`, so a second 31337
+# chain overwrites the committed deployments/31337*.json with addresses that do
+# not exist on the demo chain. Use ANVIL_CHAIN_ID=31338 for a scratch chain and
+# its artifacts land beside the real ones instead of on top of them.
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${ANVIL_PORT:-8545}"
+CHAIN_ID="${ANVIL_CHAIN_ID:-31337}"
 RPC="http://127.0.0.1:${PORT}"
 CONTRACTS="$ROOT/packages/contracts"
 LOG="$ROOT/.anvil-${PORT}.log"
@@ -30,7 +38,14 @@ DEPLOYER_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 if [[ -n "${FORK_RPC_URL:-}" ]]; then
   DEPLOY_OUT="42161.fork.json"; SEED_OUT="42161.fork.demo.json"; EXPECT_CHAIN=42161
 else
-  DEPLOY_OUT="31337.json"; SEED_OUT="31337.demo.json"; EXPECT_CHAIN=31337
+  DEPLOY_OUT="${CHAIN_ID}.json"; SEED_OUT="${CHAIN_ID}.demo.json"; EXPECT_CHAIN="$CHAIN_ID"
+  if [[ "$PORT" != "8545" && "$CHAIN_ID" == "31337" ]]; then
+    echo "Refusing: a second chain on port $PORT would still be chain 31337, and the" >&2
+    echo "deploy scripts write deployments/31337*.json unconditionally - it would" >&2
+    echo "overwrite the committed demo addresses with ones that exist only here." >&2
+    echo "Re-run with a distinct chain id:  ANVIL_CHAIN_ID=31338 ANVIL_PORT=$PORT $0" >&2
+    exit 1
+  fi
 fi
 export DEPLOY_OUT SEED_OUT
 
@@ -58,7 +73,7 @@ else
     ANVIL_ARGS+=(--fork-url "$FORK_RPC_URL")
     [[ -n "${FORK_BLOCK:-}" ]] && ANVIL_ARGS+=(--fork-block-number "$FORK_BLOCK")
   else
-    ANVIL_ARGS+=(--chain-id 31337)
+    ANVIL_ARGS+=(--chain-id "$CHAIN_ID")
   fi
   nohup anvil "${ANVIL_ARGS[@]}" >"$LOG" 2>&1 &
   disown || true

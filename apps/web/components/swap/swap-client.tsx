@@ -116,10 +116,10 @@ function PlaceholderStrategyNotice() {
 function ComparisonPlaceholder({ status }: { status: "empty" | "loading" | "failed" }) {
   const copy =
     status === "loading"
-      ? "Pricing this trade at both venues. The comparison appears as soon as Aqua and the Uniswap API answer."
+      ? "Pricing this trade at both venues."
       : status === "failed"
-        ? "No comparison to show: this request did not come back with a price. The reason, as the API reported it, is in the execution panel."
-        : "Nothing to compare yet. Enter a WBTC amount and request a quote: Aqua prices it against maker inventory, the Uniswap API prices the same trade against external liquidity, and the higher net output after gas wins.";
+        ? "No price came back. The reason, as the API reported it, is in the execution panel."
+        : "Enter a WBTC amount and request a quote. Both venues price it; the higher net output after gas wins.";
 
   return (
     <Panel cut title="Venue comparison">
@@ -255,7 +255,7 @@ export function SwapClient() {
     <Page>
       <PageHead
         title="Vortex Swap"
-        lead="Aqua quotes your trade against its maker inventory while the Uniswap API quotes the same trade against external liquidity. Whichever nets you more after gas is the one that executes."
+        lead="Aqua and Uniswap price the same trade. Whichever nets you more after gas is the one that executes."
       />
 
       {source === "fixture" ? <FixtureNotice className="mb-6" /> : null}
