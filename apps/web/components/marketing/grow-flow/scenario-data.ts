@@ -146,7 +146,7 @@ const SUCCESS_STEPS: readonly FlowStep[] = [
   {
     id: "fee",
     holdMs: 3000,
-    caption: "Performance fee: 20% of realised profit only.",
+    caption: "20% of the profit, and only the profit.",
     active: "fee",
     makerWbtc: "0",
     compounderWbtc: MAKER_FINAL_OK,
@@ -161,7 +161,7 @@ const SUCCESS_STEPS: readonly FlowStep[] = [
   },
   {
     id: "settled",
-    caption: "Maker finishes with more of the same asset.",
+    caption: "The maker finishes with more of the same asset.",
     active: "maker",
     makerWbtc: MAKER_FINAL_OK,
     status: "verified",

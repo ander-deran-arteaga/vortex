@@ -171,7 +171,7 @@ describe("grow flow section", () => {
   it("shows the fee coming out of the profit, not the principal", () => {
     mockReducedMotion(false);
     render(<GrowFlowSection />);
-    expect(screen.getByText(/fee is cut from the profit/i)).toBeInTheDocument();
+    expect(screen.getByText(/fee comes out of the profit/i)).toBeInTheDocument();
   });
 
   it("shows one caption at a time, in a single live region", () => {

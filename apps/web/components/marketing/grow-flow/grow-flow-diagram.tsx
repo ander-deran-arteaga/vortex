@@ -152,8 +152,8 @@ export function GrowFlowDiagram({
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
           <GateNode step={step} active={at("gate")} />
           <div className="panel-raised p-4">
-            <p className="text-[13px] text-say-1">Performance fee</p>
-            <p className="mt-0.5 text-xs text-say-3">Charged on realised profit only</p>
+            <p className="text-[13px] text-say-1">Fee</p>
+            <p className="mt-0.5 text-xs text-say-3">20% of profit, never principal</p>
             <div className="mt-3">
               <FeeSplit visible={at("fee") || at("return") || (at("maker") && stepNumber === totalSteps)} />
             </div>

@@ -179,9 +179,9 @@ export function FeeSplit({ visible }: { visible: boolean }) {
         ) : null}
       </div>
       <p className="mt-2 text-xs leading-relaxed text-say-2">
-        1.00000000 principal, 0.00300000 realised profit.{" "}
-        <span className="text-cu">The 0.00060000 fee is cut from the profit</span>, never
-        from the principal.
+        1.00300000 gross.{" "}
+        <span className="text-cu">The 0.00060000 fee comes out of the profit</span>,
+        leaving 1.00240000 to the maker.
       </p>
     </div>
   );
@@ -193,6 +193,6 @@ export const NODE_TITLES: Record<NodeId, string> = {
   legA: "Vortex PermAMM",
   legB: "External venue",
   gate: "Profit gate",
-  fee: "Performance fee",
+  fee: "Fee",
   return: "Aqua maker",
 };

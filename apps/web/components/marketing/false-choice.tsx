@@ -1,5 +1,5 @@
 /**
- * The centrepiece: three approaches, five questions, scannable in five seconds.
+ * The centrepiece: three approaches, three questions, scannable at a glance.
  *
  * Built as ONE CSS grid rather than three independent stacks, so every row sits
  * on a shared line across all three columns whatever the copy length. That is
@@ -15,12 +15,6 @@ const ROWS = [
     vortex: "The maker's own strategy",
   },
   {
-    question: "How fast it updates",
-    passive: "Only when arbitraged",
-    proprietary: "Instantly, offchain",
-    vortex: "Every quote, against a fresh reference price",
-  },
-  {
     question: "Who can change the spread",
     passive: "Nobody",
     proprietary: "The operator, at will",
@@ -31,12 +25,6 @@ const ROWS = [
     passive: "Nothing to abuse",
     proprietary: "Reputation",
     vortex: "The contract reverts",
-  },
-  {
-    question: "Who you must trust",
-    passive: "The maths",
-    proprietary: "The operator",
-    vortex: "The maths, again",
   },
 ] as const;
 

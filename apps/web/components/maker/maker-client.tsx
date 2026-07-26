@@ -18,7 +18,6 @@ import { ERC20_APPROVE_ABI, asEvmAddress } from "@/lib/erc20";
 import { parseTokenAmount } from "@/lib/format";
 import { STRATEGY_HASHES } from "@/lib/strategy-config";
 
-const SUPPORTED_CHAIN_IDS = [42161, 31337];
 /** Aqua is not deployed from the UI; approvals target the address the API reports. */
 const SHIP_BLOCKED_NOTE = "Requires the Aqua strategy contracts, Phase 2/6";
 
@@ -120,21 +119,14 @@ export function MakerClient() {
   const [swapForm, setSwapForm] = useState({
     wbtc: "1.00000000",
     usdc: "100000.000000",
-    targetWeight: "5000",
     maxTrade: "0.50000000",
     safetyFee: "5",
     commercialFee: "10",
-    inventoryStrength: "2500",
-    boundLower: "3000",
-    boundUpper: "7000",
-    expiry: "86400",
   });
   const [growForm, setGrowForm] = useState({
     maxPerExecution: "1.00000000",
     minProfit: "0.00240000",
-    performanceFee: "2000",
     maxSlippage: "50",
-    expiry: "86400",
   });
 
   const swapApproval = useApproval();
@@ -146,25 +138,22 @@ export function MakerClient() {
   const setGrowField = (key: keyof typeof growForm) => (value: string) =>
     setGrowForm((current) => ({ ...current, [key]: value }));
 
+  // Only the parameters a reader needs to see what the strategy is doing. The
+  // full set the contract accepts — weight targets, inventory strength, hard
+  // bounds, expiry — is configuration, not explanation, and it belongs in the
+  // shipping tool rather than on a page someone is reading to understand.
   const swapFields: StrategyField[] = [
     { key: "wbtc", label: "WBTC allocated", kind: "amount", decimals: WBTC.decimals, value: swapForm.wbtc, onChange: setSwapField("wbtc") },
     { key: "usdc", label: "USDC allocated", kind: "amount", decimals: USDC.decimals, value: swapForm.usdc, onChange: setSwapField("usdc") },
-    { key: "targetWeight", label: "Target weight", kind: "bps", value: swapForm.targetWeight, onChange: setSwapField("targetWeight"), hint: "Share of inventory the strategy steers toward." },
     { key: "maxTrade", label: "Maximum trade", kind: "amount", decimals: WBTC.decimals, value: swapForm.maxTrade, onChange: setSwapField("maxTrade") },
     { key: "safetyFee", label: "Safety fee floor", kind: "bps", value: swapForm.safetyFee, onChange: setSwapField("safetyFee"), hint: "Immutable floor: quotes never price below it." },
     { key: "commercialFee", label: "Commercial fee", kind: "bps", value: swapForm.commercialFee, onChange: setSwapField("commercialFee") },
-    { key: "inventoryStrength", label: "Inventory strength", kind: "bps", value: swapForm.inventoryStrength, onChange: setSwapField("inventoryStrength"), hint: "How hard pricing pushes back toward the target weight." },
-    { key: "boundLower", label: "Hard weight bound, lower", kind: "bps", value: swapForm.boundLower, onChange: setSwapField("boundLower") },
-    { key: "boundUpper", label: "Hard weight bound, upper", kind: "bps", value: swapForm.boundUpper, onChange: setSwapField("boundUpper") },
-    { key: "swapExpiry", label: "Strategy expiry", kind: "duration", value: swapForm.expiry, onChange: setSwapField("expiry") },
   ];
 
   const growFields: StrategyField[] = [
     { key: "maxPerExecution", label: "Maximum WBTC per execution", kind: "amount", decimals: WBTC.decimals, value: growForm.maxPerExecution, onChange: setGrowField("maxPerExecution") },
     { key: "minProfit", label: "Minimum profit", kind: "amount", decimals: WBTC.decimals, value: growForm.minProfit, onChange: setGrowField("minProfit"), hint: "The cycle reverts below this." },
-    { key: "performanceFee", label: "Performance fee", kind: "bps", value: growForm.performanceFee, onChange: setGrowField("performanceFee"), hint: "Charged on realized profit only." },
     { key: "maxSlippage", label: "Maximum slippage", kind: "bps", value: growForm.maxSlippage, onChange: setGrowField("maxSlippage") },
-    { key: "growExpiry", label: "Strategy expiry", kind: "duration", value: growForm.expiry, onChange: setGrowField("expiry") },
   ];
 
   const approvalStatus = (

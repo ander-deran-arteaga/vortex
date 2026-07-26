@@ -56,17 +56,6 @@ const GUARANTEES = [
     revert: "VortexMaxTradeExceeded",
   },
   {
-    claim: "Inventory bounds hold.",
-    detail: "A swap that would push the book past its limits is refused.",
-    revert: "VortexInventoryBoundBreached",
-  },
-  {
-    claim: "Maker solvency is checked, not assumed.",
-    detail:
-      "Executable size is the minimum of virtual balance, wallet balance and allowance.",
-    revert: "never the virtual balance alone",
-  },
-  {
     claim: "Grow is atomic.",
     detail:
       "Below the profit floor the whole cycle reverts and balances are untouched.",
@@ -81,12 +70,12 @@ const FOUNDATIONS = [
   { name: "SwapVM", line: "Strategy enforced onchain.", Icon: ShieldCheck },
   {
     name: "Uniswap v4 & Trading API",
-    line: "Depth, hooks and the benchmark every quote must beat.",
+    line: "The benchmark every quote must beat.",
     Icon: Layers,
   },
   {
     name: "Pull-oracle-ready reference price",
-    line: "Freshness enforced per swap.",
+    line: "Checked fresh on every swap.",
     Icon: Radio,
   },
 ] as const;
@@ -239,12 +228,6 @@ export default function LandingPage() {
                   Improves the quote only while the maker profits.
                 </dd>
               </div>
-              <div>
-                <dt className="text-sm text-cu">A fresh reference price</dt>
-                <dd className="mt-1 text-sm leading-relaxed text-say-2">
-                  Required on every swap, before anything settles.
-                </dd>
-              </div>
             </dl>
           </div>
         </div>
@@ -257,7 +240,7 @@ export default function LandingPage() {
           The quote signer cannot cross these lines.
         </h2>
         <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-say-2">
-          Real checks in SwapVM, each named by the error it reverts with.
+          Real checks, each named by the error it reverts with.
         </p>
 
         <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
