@@ -369,7 +369,7 @@ its deploy mark and the full 526 bps.
 | `GROW_UNAVAILABLE` | Grow not deployed on this chain | `./scripts/ensure-demo.sh` |
 | `STRATEGY_NOT_FOUND`, all contracts present | contracts deployed but the Aqua strategy was never shipped — deploy and ship are separate steps | `./scripts/ensure-demo.sh` (reports `shipped by this run`) |
 | Web 500 on a route that builds fine | Dev server compiled against moved files | Restart the web server (§5) |
-| Web 500s, or `next build` fails with `Cannot find module for page: /_not-found` | `next build` was run while `next dev` was up — both write the same `.next`, so each corrupts the other | Stop the dev server, `rm -rf apps/web/.next`, build, then restart dev. Never build while the dev server is running |
+| Web 500s, an unstyled page, or `next build` failing with `Cannot find module for page: /_not-found` | `next build` and `next dev` share `apps/web/.next` and corrupt each other — in either order | Stop dev, `rm -rf apps/web/.next`, build; then **`rm -rf apps/web/.next` again** before restarting dev, or dev boots on the production output and serves 500s and unstyled HTML |
 | Uniswap 429 | Rate limit (~6 req/s per key) | Wait; the client already paces and backs off |
 | A service vanished | Someone ran a broad `pkill` | Restart it; kill by PID only (§1) |
 | `GROW_EXECUTION_FAILED`, hook error in `beforeSwap` | Oracle left on `UNISWAP_WINS`; pool-vs-oracle deviation trips the hook guard | `SCENARIO=AQUA_WINS` reset (§6 Scene 2), then re-scan |
