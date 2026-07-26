@@ -87,16 +87,21 @@ async function loadUniswapQuote(
  * scaled off Uniswap's stated `gasFeeUSD` by the gas-units ratio — the same
  * reference trick the comparator uses, so the figure shown to the taker
  * matches the figure the comparator actually charged it.
+ *
+ * Returns **null** when there is no reference quote to derive a rate from.
+ * Vortex has no ETH price feed, so on a chain where Uniswap cannot quote the
+ * gas genuinely cannot be priced — and "0" would read as "this venue is free
+ * to execute", which is a fabricated number, not a missing one.
  */
 function aquaGasUsd(
   aquaGasUnits: bigint,
   uniswapQuote: UniswapQuote | null,
-): string {
+): string | null {
   if (!uniswapQuote || uniswapQuote.gasUnits <= 0n || !uniswapQuote.gasFeeUSD) {
-    return "0";
+    return null;
   }
   const uniswapUsd = Number(uniswapQuote.gasFeeUSD);
-  if (!Number.isFinite(uniswapUsd)) return "0";
+  if (!Number.isFinite(uniswapUsd)) return null;
   const ratio = Number(aquaGasUnits) / Number(uniswapQuote.gasUnits);
   return String(uniswapUsd * ratio);
 }
@@ -130,7 +135,7 @@ function toUniswapComparison(
     source: "live",
     amountOut: quote.amountOut.toString(),
     minimumAmountOut: quote.minimumAmountOut.toString(),
-    estimatedGasUsd: quote.gasFeeUSD ?? "0",
+    estimatedGasUsd: quote.gasFeeUSD ?? null,
     netAmountOut: (compared?.netAmountOut ?? 0n).toString(),
     requestId: quote.requestId,
   };

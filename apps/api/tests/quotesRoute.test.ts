@@ -853,3 +853,40 @@ describe(`POST ${API_ROUTES.transactionsAqua}`, () => {
     expect(executions[0]!.amountOut).toBeNull();
   });
 });
+
+describe("gas is priced honestly, never fabricated", () => {
+  it("prices the Aqua leg from Uniswap's rate when a reference exists", async () => {
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    const aqua = body.comparison.aqua!;
+    expect(aqua.estimatedGasUsd).not.toBeNull();
+    expect(Number(aqua.estimatedGasUsd)).toBeGreaterThan(0);
+    // Aqua burns more gas than the AMM route, so it must cost more.
+    expect(Number(aqua.estimatedGasUsd)).toBeGreaterThan(
+      Number(body.comparison.uniswap!.estimatedGasUsd),
+    );
+    // And the charge is actually deducted, so net is below the minimum.
+    expect(BigInt(aqua.netAmountOut)).toBeLessThan(BigInt(aqua.minimumAmountOut));
+  });
+
+  it("reports null rather than 0 when gas cannot be priced", async () => {
+    // No Uniswap quote means no rate to derive from, and Vortex has no ETH
+    // price feed. "0" would claim the venue is free to execute.
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE, null);
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    expect(body.comparison.uniswap).toBeNull();
+    expect(body.comparison.aqua!.estimatedGasUsd).toBeNull();
+  });
+
+  it("never emits the string '0' as a gas estimate", async () => {
+    for (const client of [stubUniswapClient(), null]) {
+      built = serverWith(AQUA_COMPETITIVE_FIXTURE, client);
+      const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+      expect(body.comparison.aqua!.estimatedGasUsd).not.toBe("0");
+      await built.app.close();
+      built = undefined;
+    }
+  });
+});

@@ -61,7 +61,12 @@ export const zAquaComparison = z.object({
   source: zQuoteSource,
   amountOut: zAmount,
   minimumAmountOut: zAmount,
-  estimatedGasUsd: z.string(),
+  /**
+   * null when gas could not be priced (no reference quote to derive a rate
+   * from). Render "gas not priced" — never a fabricated 0, which would read
+   * as "this venue is free to execute".
+   */
+  estimatedGasUsd: z.string().nullable(),
   netAmountOut: zAmount,
   safetyFeeBps: z.number(),
   commercialFeeBps: z.number(),
@@ -74,7 +79,8 @@ export const zUniswapComparison = z.object({
   source: zQuoteSource,
   amountOut: zAmount,
   minimumAmountOut: zAmount,
-  estimatedGasUsd: z.string(),
+  /** null when gas could not be priced. See zAquaComparison. */
+  estimatedGasUsd: z.string().nullable(),
   netAmountOut: zAmount,
   requestId: z.string().optional(),
 });
