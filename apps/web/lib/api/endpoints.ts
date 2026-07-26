@@ -167,14 +167,26 @@ export async function fetchStrategyHealth(
   );
 }
 
+/**
+ * The API returns the history wrapped as `{ executions: [...] }`, not a bare
+ * array. Validating the real shape is what surfaced the mismatch instead of
+ * silently rendering an empty table, so the envelope is modelled here rather
+ * than tolerated loosely: if it changes again, this fails loudly on purpose.
+ */
+const zExecutionsResponse = z.object({
+  executions: z.array(zExecutionRecord),
+});
+
 export async function fetchExecutions(options: {
   now: number;
 }): Promise<Sourced<ExecutionRecord[]>> {
   return withFixtureFallback(
-    () =>
-      apiRequest(API_ROUTES.executions, {
-        schema: z.array(zExecutionRecord),
-      }),
+    async () => {
+      const response = await apiRequest(API_ROUTES.executions, {
+        schema: zExecutionsResponse,
+      });
+      return response.executions;
+    },
     () => buildExecutionsFixture(options),
   );
 }

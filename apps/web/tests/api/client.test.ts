@@ -6,7 +6,7 @@ import {
   ApiRequestError,
   ApiUnavailableError,
 } from "@/lib/api/errors";
-import { fetchConfig, fetchStrategyHealth } from "@/lib/api/endpoints";
+import { fetchConfig, fetchExecutions, fetchStrategyHealth } from "@/lib/api/endpoints";
 import { FIXTURE_STRATEGY_HASH } from "@/lib/api/fixtures";
 
 const schema = z.object({ ok: z.boolean() });
@@ -144,6 +144,25 @@ describe("fixture fallback honesty invariant", () => {
     await expect(fetchStrategyHealth(unknown)).rejects.toBeInstanceOf(
       ApiUnavailableError,
     );
+  });
+
+  it("reads the executions envelope the API actually returns", async () => {
+    // The API wraps the history as { executions: [...] }. A bare array here
+    // used to throw ApiContractError and blank the dashboard table.
+    const record = {
+      id: "e1", kind: "GROW", chainId: 31337, txHash: `0x${"ab".repeat(32)}`,
+      blockNumber: null, strategyHash: `0x${"cd".repeat(32)}`,
+      maker: "0x1111111111111111111111111111111111111111",
+      taker: null, tokenIn: null, tokenOut: null, amountIn: null,
+      amountOut: null, uniswapRequestId: null, opportunityId: null,
+      grossProfit: null, makerReturn: null, performanceFee: null,
+      failureCategory: null, timestamp: 1_800_000_000_000,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ executions: [record] })));
+    const result = await fetchExecutions({ now: 1_800_000_000_000 });
+    expect(result.source).toBe("live");
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]?.kind).toBe("GROW");
   });
 
   it("RETHROWS a real API failure instead of masking it as fixture data", async () => {

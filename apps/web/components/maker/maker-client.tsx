@@ -279,7 +279,7 @@ export function MakerClient() {
               role="alert"
               lead="Coverage could not be read, so the panels below are missing rather than empty."
             >
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-2 space-y-1 break-words">
                 {healthFailures.map((failure) => (
                   <li key={failure.label}>
                     <span className="text-say-1">{failure.label}</span>:{" "}

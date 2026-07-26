@@ -229,7 +229,7 @@ export function DashboardClient() {
               Some reads failed. The panels below are incomplete rather than
               empty.
             </p>
-            <ul className="mt-2 space-y-1">
+            <ul className="mt-2 space-y-1 break-words">
               {failures.map((failure) => (
                 <li key={failure.label}>
                   <span className="text-say-1">{failure.label}</span>:{" "}
