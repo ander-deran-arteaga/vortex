@@ -37,11 +37,21 @@ if [[ -n "${FORK_RPC_URL:-}" ]]; then
   # both venues price the same real assets and the comparison is genuine.
   echo "==> starting anvil as an Arbitrum One FORK (real chain id, real tokens)"
   ANVIL_ARGS+=(--fork-url "$FORK_RPC_URL")
-  # PIN the fork block. Forking at "latest" makes the run unreproducible: a
-  # later replay lands on different chain state and the evidence stops being
-  # checkable. The brief accepts a *pinned* fork as final proof, and a fork that
-  # is not pinned is not that. Override with FORK_BLOCK to move it deliberately.
-  ANVIL_ARGS+=(--fork-block-number "${FORK_BLOCK:-487730370}")
+  # Fork at LATEST by default, and RECORD the block rather than pinning one.
+  #
+  # Pinning looks strictly better and is not: public Arbitrum RPCs are pruned,
+  # not archive. A block pinned today fails to fork a couple of hours later with
+  # "missing trie node ... state is not available" — the state is simply gone.
+  # I shipped a pinned default and it broke this script within two hours.
+  #
+  # So: default to latest so the demo always works, and write the block actually
+  # used into the artifact, which gives the evidence its "against what state"
+  # answer without depending on an archive node. Set FORK_BLOCK only if
+  # FORK_RPC_URL points at a genuine archive endpoint.
+  if [[ -n "${FORK_BLOCK:-}" ]]; then
+    echo "    pinning fork block $FORK_BLOCK (requires an ARCHIVE rpc)"
+    ANVIL_ARGS+=(--fork-block-number "$FORK_BLOCK")
+  fi
   EXPECTED_CHAIN_ID=42161
   # NOT "42161.json": that file is reserved for a genuine Arbitrum One
   # deployment. These addresses exist only on a local fork, and publishing them
@@ -151,6 +161,26 @@ echo "==> [4] deploying Vortex Grow (compounder, simulated venue, shipped strate
     --rpc-url "$RPC" --private-key "$DEPLOYER_KEY" --broadcast
 )
 
+fi
+
+# Record the block the fork actually ran against. Pinning cannot be relied on
+# (pruned public RPCs), so the artifact carries the answer instead.
+if [[ -n "${FORK_RPC_URL:-}" ]]; then
+  FORK_BASE=$(cast block-number --rpc-url "$RPC" 2>/dev/null || echo unknown)
+  python3 - "$ROOT/deployments/${DEPLOY_OUT}" "$FORK_BASE" <<'PYEOF'
+import json, sys
+path, block = sys.argv[1], sys.argv[2]
+d = json.load(open(path))
+d["forkedFrom"] = "arbitrum-one"
+d["forkBlockObserved"] = int(block) if block.isdigit() else block
+d["note"] = ("Local Arbitrum One fork. These addresses exist only on this fork, "
+             "never on public Arbitrum. forkBlockObserved is the head after "
+             "deployment, recorded because public RPCs are pruned and a pinned "
+             "block cannot be re-forked later.")
+json.dump(d, open(path, "w"), indent=2, sort_keys=True)
+open(path, "a").write("\n")
+PYEOF
+  echo "    fork state recorded: block ${FORK_BASE}"
 fi
 
 echo "==> deployments/${DEPLOY_OUT} refreshed:"
