@@ -90,9 +90,12 @@ Pulls the maker's WBTC through Aqua, cycles it (Vortex PermAMM exact-output →
 external venue), and pushes back more than it took, atomically.
 
 ```
-wallet  WBTC 7.00000000 -> 7.03475502
-virtual WBTC 5.00000000 -> 5.03475502     same delta, fee taken from profit only
+wallet  WBTC +0.03475502      (absolute balance depends on what ran before)
+virtual WBTC +0.03475502      identical delta; fee taken from profit only
 ```
+The **delta** is the invariant and the script asserts it: real and virtual
+growth must agree exactly, and the bridge asset must end at zero. Absolute
+balances shift if a Swap ran first, since that moves WBTC to the same maker.
 
 > The external venue is **simulated** (`MockExternalRouter`, marking WBTC at
 > 95k against the pool's 100k). The compounding mechanism, the atomicity and
