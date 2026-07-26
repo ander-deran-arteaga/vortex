@@ -15,6 +15,13 @@ export function registerConfigRoutes(
       decimals: t.decimals,
     })),
     contracts: ctx.deployment.contracts as ConfigResponse["contracts"],
+    // Published so no client hardcodes a hash: these change on every reseed,
+    // and a stale constant quotes a strategy that was never shipped — which
+    // reads in the UI as "Aqua is broken" rather than "wrong strategy".
+    strategies: {
+      swap: ctx.aquaExecution?.strategy.strategyHash ?? null,
+      grow: ctx.grow?.deployment.strategyHash ?? null,
+    },
     features: {
       // True only when a compounder, both signers and the PermAMM leg are
       // actually deployed — the same condition the Grow endpoints require, so

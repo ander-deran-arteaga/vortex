@@ -300,14 +300,18 @@ export async function quoteExchange(
     selectedVenue,
     expiresAt: session.expiresAt,
     comparison: {
-      aqua: aquaQuote
-        ? toAquaComparison(
-            aquaQuote,
-            comparison.aqua,
-            deps.aquaSource.kind,
-            uniswapQuote,
-          )
-        : null,
+      // A leg that could not price at all is reported as absent, exactly like
+      // Uniswap's empty state. Emitting zeros instead reads as "this venue
+      // offers you nothing" and hides a real fee floor behind a fabricated 0.
+      aqua:
+        aquaQuote && !(!aquaQuote.executable && aquaQuote.amountOut === 0n)
+          ? toAquaComparison(
+              aquaQuote,
+              comparison.aqua,
+              deps.aquaSource.kind,
+              uniswapQuote,
+            )
+          : null,
       uniswap: uniswapQuote
         ? toUniswapComparison(uniswapQuote, comparison.uniswap)
         : null,

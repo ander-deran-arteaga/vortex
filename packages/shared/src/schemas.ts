@@ -358,6 +358,18 @@ export const zConfigResponse = z.object({
     z.object({ address: zAddress, symbol: z.string(), decimals: z.number().int() }),
   ),
   contracts: z.record(z.string(), zAddress),
+  /**
+   * Strategy hashes the server can actually quote, so a client never has to
+   * hardcode one. A strategy is Aqua *state*, not a contract, so these change
+   * on every reseed and a stale constant silently produces an empty Aqua leg.
+   * `null` means nothing is shipped for that product on this chain.
+   */
+  strategies: z
+    .object({
+      swap: zBytes32.nullable(),
+      grow: zBytes32.nullable(),
+    })
+    .optional(),
   features: z.object({
     growEnabled: z.boolean(),
     demoMode: z.boolean(),

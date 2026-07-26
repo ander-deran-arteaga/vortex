@@ -101,3 +101,36 @@ describe("error envelope", () => {
     expect(typeof body.error.message).toBe("string");
   });
 });
+
+/**
+ * The UI has no way to know which strategy to quote unless the API says so. A
+ * strategy is Aqua *state*, not a contract, so its hash changes on every
+ * reseed — a hardcoded constant then quotes a strategy that was never shipped,
+ * which renders as "Aqua is broken" rather than "wrong strategy".
+ */
+describe("config publishes the strategy hashes", () => {
+  it("reports the deployed swap and grow hashes on a seeded chain", async () => {
+    built = hermetic({ CHAIN_ID: "31337" });
+    const res = await built.app.inject({ method: "GET", url: API_ROUTES.config });
+
+    const body = zConfigResponse.parse(res.json());
+    expect(body.strategies).toBeDefined();
+    // Whatever is deployed, it must match what the server would actually quote.
+    expect(body.strategies?.swap).toBe(
+      built.ctx.aquaExecution?.strategy.strategyHash ?? null,
+    );
+    expect(body.strategies?.grow).toBe(
+      built.ctx.grow?.deployment.strategyHash ?? null,
+    );
+  });
+
+  it("reports null rather than a placeholder when nothing is shipped", async () => {
+    // 42161 has no seeded strategy; inventing one would be the bug this fixes.
+    built = hermetic({ CHAIN_ID: "42161" });
+    const res = await built.app.inject({ method: "GET", url: API_ROUTES.config });
+
+    const body = zConfigResponse.parse(res.json());
+    expect(body.strategies?.swap).toBeNull();
+    expect(body.strategies?.grow).toBeNull();
+  });
+});

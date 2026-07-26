@@ -1068,3 +1068,54 @@ describe("reference-priced Uniswap leg on a local chain", () => {
     expect(body.selectedVenue).toBe("AQUA");
   });
 });
+
+describe("an unquotable Aqua leg is absent, not zero", () => {
+  it("returns aqua: null for a strategy that was never shipped", async () => {
+    // The exact symptom: the live source cannot resolve an unshipped hash, so
+    // it returns a non-executable quote of ZEROS. Emitted as-is that reads as
+    // "Aqua offers you nothing" and hides the real fee floor behind a
+    // fabricated 0.
+    const unshipped = {
+      kind: "live" as const,
+      strategyHealth: async () => null,
+      quote: async (params: { strategyHash: `0x${string}`; amountIn: bigint }) => ({
+        strategyHash: params.strategyHash,
+        amountIn: params.amountIn,
+        amountOut: 0n,
+        minimumAmountOut: 0n,
+        gasUnits: 260_000n,
+        gasCostInOutputToken: null,
+        safetyFeeBps: 0,
+        commercialFeeBps: 0,
+        inventoryAdjustmentBps: 0,
+        makerCoverageBps: 0,
+        executable: false,
+        reason: "AQUA_ORDER_UNAVAILABLE",
+      }),
+    };
+
+    built = buildServer(
+      { CHAIN_ID: "42161" },
+      {
+        envSource: {},
+        aquaSource: unshipped as never,
+        uniswapClient: stubUniswapClient(),
+      },
+    );
+
+    const res = await postQuote(built);
+
+    const body = zExchangeQuoteResponse.parse(res.json());
+    expect(body.comparison.aqua).toBeNull();
+    // Uniswap still priced it, so the trade still routes somewhere honest.
+    expect(body.selectedVenue).toBe("UNISWAP");
+  });
+
+  it("keeps the leg when Aqua genuinely priced it", async () => {
+    built = serverWith(AQUA_COMPETITIVE_FIXTURE);
+    const body = zExchangeQuoteResponse.parse((await postQuote(built)).json());
+
+    expect(body.comparison.aqua).not.toBeNull();
+    expect(BigInt(body.comparison.aqua!.amountOut)).toBeGreaterThan(0n);
+  });
+});
