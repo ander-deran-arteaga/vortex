@@ -1,8 +1,8 @@
 {
   "chainId": 42161,
   "deployed": false,
-  "note": "Vortex is NOT deployed to public Arbitrum One. This file is intentionally empty and kept so the absence is explicit rather than looking like an oversight. Evidence comes from a pinned Arbitrum One fork (see forkBlock) or from local chain 31337. Fork runs write to 42161.fork.json, which is gitignored precisely so fork addresses can never be mistaken for mainnet deployments.",
-  "forkBlock": 487730370,
+  "note": "Vortex is NOT deployed to public Arbitrum One. This file is intentionally empty and kept so the absence is explicit rather than looking like an oversight. Evidence comes from a local Arbitrum One fork or from local chain 31337. Fork runs write to 42161.fork.json, which is gitignored precisely so fork addresses can never be mistaken for mainnet deployments, and which records the block it actually forked from in forkBlockObserved.",
+  "forkBlockPinning": "Not pinned. Public Arbitrum RPCs are pruned rather than archive, so a block pinned today cannot be re-forked a few hours later ('missing trie node ... state is not available'). The bootstrap forks at latest and records the observed block in the fork artifact instead; set FORK_BLOCK only against a genuine archive endpoint.",
   "reason": "Pricing reads MockReferenceOracle, an owner-set feed. Deploying that to mainnet and presenting it as a reference price would be the same mock-as-live misrepresentation this project rejects elsewhere, and a production oracle integration is out of scope for the hackathon build.",
   "howToReproduce": "FORK_RPC_URL=https://arb1.arbitrum.io/rpc bash scripts/bootstrap-fork.sh",
   "contracts": {}
