@@ -23,13 +23,35 @@ pass() { printf '  \033[32mPASS\033[0m  %s\n' "$1"; }
 fail() { printf '  \033[31mFAIL\033[0m  %s\n        layer: %s\n' "$1" "$2"; FAILED=1; }
 head() { printf '\n\033[1m%s\033[0m\n' "$1"; }
 
+# Stop by PID and then WAIT FOR THE PORT TO ACTUALLY BE FREE.
+#
+# `kill` returning is not the same as the socket being released, and if 3000 is
+# still held when `next dev` starts, Next does not fail — it prints "Port 3000
+# is in use … using available port 3004 instead" and serves happily on the
+# wrong port. Everything looks up while the runbook, and the judge, are pointed
+# at 3000. Silent port drift is exactly the failure this project keeps hitting,
+# so it is treated as fatal rather than tidied around.
 stop_by_pid() {
   for p in 3000 3001 8545; do
     local pid
     pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
-    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null && echo "  stopped :$p (pid $pid)"
+    if [[ -n "$pid" ]]; then
+      kill "$pid" 2>/dev/null
+      for _ in $(seq 1 15); do
+        ss -ltn 2>/dev/null | grep -q ":$p " || break
+        sleep 1
+      done
+      if ss -ltn 2>/dev/null | grep -q ":$p "; then
+        pid=$(ss -ltnp 2>/dev/null | grep ":$p " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | head -1)
+        [[ -n "$pid" ]] && kill -9 "$pid" 2>/dev/null && sleep 2
+      fi
+      if ss -ltn 2>/dev/null | grep -q ":$p "; then
+        echo "  WARNING: :$p is still held — a new server would silently move to another port"
+      else
+        echo "  stopped :$p"
+      fi
+    fi
   done
-  sleep 3
 }
 
 # Wait for an actual 200. `curl -o /dev/null` succeeds on a 500 too, so the
@@ -55,6 +77,12 @@ if [[ "${FRESH:-0}" == "1" ]]; then
   wait_for_200 "$API/api/v1/health" 45 || { fail "API never became ready" "backend"; exit 1; }
   # First-request compile in dev mode is slow; give it a real budget.
   wait_for_200 "$WEB/" 90              || { fail "web never served a 200" "frontend"; exit 1; }
+  # Catch the silent-port-drift case explicitly: a green page on :3004 is not a
+  # green demo when every instruction says :3000.
+  if grep -q "using available port" /tmp/verify-web.log 2>/dev/null; then
+    fail "web moved off port 3000 ($(grep -o 'using available port [0-9]*' /tmp/verify-web.log | head -1))" "environment"
+    exit 1
+  fi
 fi
 
 SWAP_HASH=$(node -e "console.log(require('$ROOT/deployments/31337.demo.json').strategyHash)" 2>/dev/null)
