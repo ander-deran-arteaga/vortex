@@ -1,6 +1,10 @@
 "use client";
 
+import type { ExchangeQuoteResponse } from "@vortex/shared";
+import { WBTC } from "@vortex/shared";
+import { BuyEstimate } from "@/components/swap/buy-estimate";
 import { Action, StatusMark } from "@/components/ui/primitives";
+import { formatTokenAmount } from "@/lib/format";
 
 const SLIPPAGE_OPTIONS = [10, 30, 50] as const;
 
@@ -13,6 +17,9 @@ export function SwapForm({
   disabled,
   busy,
   error,
+  quote,
+  quoteStale = false,
+  walletBalance,
 }: {
   amountInput: string;
   onAmountChange: (value: string) => void;
@@ -22,7 +29,13 @@ export function SwapForm({
   disabled: boolean;
   busy: boolean;
   error: string | null;
+  /** The current quote, or null before one exists. */
+  quote: ExchangeQuoteResponse | null;
+  quoteStale?: boolean;
+  /** The connected wallet's WBTC balance in base units, when known. */
+  walletBalance?: bigint;
 }) {
+  const canUseMax = walletBalance !== undefined && walletBalance > 0n;
   return (
     <form
       className="panel p-5"
@@ -39,9 +52,26 @@ export function SwapForm({
         chip beside it.
       */}
       <div className="mt-5">
-        <label htmlFor="swap-amount" className="block text-sm text-say-2">
-          Sell
-        </label>
+        <div className="flex items-baseline justify-between gap-3">
+          <label htmlFor="swap-amount" className="block text-sm text-say-2">
+            Sell
+          </label>
+          {canUseMax ? (
+            <button
+              type="button"
+              onClick={() =>
+                onAmountChange(formatTokenAmount(walletBalance, WBTC.decimals))
+              }
+              className="text-xs text-say-2 transition-colors duration-150 hover:text-cu"
+            >
+              Balance{" "}
+              <span className="num">
+                {formatTokenAmount(walletBalance, WBTC.decimals, 4)}
+              </span>
+              <span className="ml-1.5 text-cu">Max</span>
+            </button>
+          ) : null}
+        </div>
         <div className="mt-2 flex items-baseline gap-3 rounded-[4px] bg-ink-0 px-4 py-4 focus-within:shadow-[inset_0_0_0_1px_var(--color-cu)]">
           <input
             id="swap-amount"
@@ -67,10 +97,7 @@ export function SwapForm({
 
       <div className="mt-5">
         <span className="block text-sm text-say-2">Buy</span>
-        <div className="mt-2 flex items-baseline justify-between gap-3 rounded-[4px] bg-ink-0 px-4 py-3">
-          <span className="min-w-0 truncate text-sm text-say-2">Quoted per venue</span>
-          <span className="shrink-0 text-sm font-medium text-say-2">USDC</span>
-        </div>
+        <BuyEstimate quote={quote} stale={quoteStale} />
       </div>
 
       <fieldset className="mt-5">

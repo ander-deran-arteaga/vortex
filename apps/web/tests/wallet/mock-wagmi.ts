@@ -22,6 +22,8 @@ export const switchChainSpy = vi.fn();
 export const writeContractAsyncSpy = vi.fn();
 export const sendTransactionAsyncSpy = vi.fn();
 export const readContractSpy = vi.fn();
+/** Balance shown beside the Max action; undefined means "not known". */
+export const walletBalance: { current: bigint | undefined } = { current: undefined };
 export const callSpy = vi.fn();
 export const waitForReceiptSpy = vi.fn();
 
@@ -30,6 +32,7 @@ export function setWallet(scenario: WalletScenario) {
 }
 
 export function resetWallet() {
+  walletBalance.current = undefined;
   walletState.current = { isConnected: false };
   switchChainSpy.mockReset();
   writeContractAsyncSpy.mockReset();
@@ -68,6 +71,11 @@ export const wagmiMock = {
     isSuccess: false,
     isLoading: false,
     data: undefined,
+  }),
+  useReadContract: () => ({
+    data: walletBalance.current,
+    isLoading: false,
+    error: null,
   }),
   useSendTransaction: () => ({
     sendTransactionAsync: sendTransactionAsyncSpy,

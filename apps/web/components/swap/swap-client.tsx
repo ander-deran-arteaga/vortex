@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { useAccount, useSwitchChain } from "wagmi";
+import { erc20Abi } from "viem";
+import { useAccount, useReadContract, useSwitchChain } from "wagmi";
 import { WBTC } from "@vortex/shared";
 import { FixtureNotice } from "@/components/source-badge";
 import { QuoteComparison } from "@/components/swap/quote-comparison";
@@ -149,9 +150,20 @@ export function SwapClient() {
     proceed,
     reset,
     dispatch,
+    tokens,
   } = useSwapFlow();
   const { execute, approve, approvalNeed } = useSwapExecution(dispatch);
   const { address, chain, isConnected } = useAccount();
+
+  // The taker's own WBTC balance, for the Max action. Only read when a wallet
+  // is connected; the field degrades to no Max rather than guessing.
+  const wbtcBalance = useReadContract({
+    abi: erc20Abi,
+    address: tokens.wbtc.address as `0x${string}`,
+    functionName: "balanceOf",
+    args: address === undefined ? undefined : [address],
+    query: { enabled: address !== undefined },
+  });
   const { switchChain, isPending: switchPending } = useSwitchChain();
 
   const parsedAmount = useMemo(() => {
@@ -263,6 +275,11 @@ export function SwapClient() {
             disabled={quoting}
             busy={quoting}
             error={inputError}
+            quote={quote}
+            quoteStale={expired}
+            {...(wbtcBalance.data === undefined
+              ? {}
+              : { walletBalance: wbtcBalance.data })}
           />
 
           {!isConnected ? (

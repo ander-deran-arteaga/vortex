@@ -192,5 +192,8 @@ export function useSwapFlow() {
     dispatch,
     isConnected: Boolean(address),
     chainId: chain?.id,
+    // Exposed so the page reads balances against the same token addresses the
+    // quote was requested with, rather than resolving them a second time.
+    tokens,
   };
 }
