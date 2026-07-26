@@ -12,8 +12,11 @@ import { VortexCompounder } from "../src/compound/VortexCompounder.sol";
 import { VortexCompoundRouteLib, VortexGrowStrategy } from "../src/compound/VortexCompoundTypes.sol";
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 import { MockExternalRouter } from "../src/mocks/MockExternalRouter.sol";
+import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 import { MockStalePool } from "../src/mocks/MockStalePool.sol";
 import { VortexRouter } from "../src/permamm/VortexRouter.sol";
+
+import { DemoPrice } from "./DemoPrice.sol";
 
 /// @notice Deploys Vortex Grow on the local chain: the compounder, the
 ///         simulated external venue, and a shipped single-asset WBTC strategy
@@ -36,9 +39,13 @@ contract DeployGrow is Script {
     uint16 internal constant PERFORMANCE_FEE_BPS = 2_000; // 20% of realized profit
     uint256 internal constant SHIPPED_WBTC = 5e8; // 5 WBTC of maker capital
 
-    /// @dev The venue sells WBTC at 95k while the PermAMM marks it at 100k.
-    uint256 internal constant EXTERNAL_WBTC_PRICE_WHOLE_USDC = 95_000;
-    uint256 internal constant POOL_MARK_WHOLE_USDC = 100_000;
+    /// @dev The venue sells WBTC below the PermAMM mark, and that gap IS the
+    ///      compounder's profit. Both numbers are derived from the oracle the
+    ///      pool was initialised from, never restated: the hook rejects a swap
+    ///      whose pool and oracle disagree, so a mark that moves in one place
+    ///      and not the other bricks every swap on a chain that looks healthy.
+    uint256 private poolMarkWholeUsdc;
+    uint256 private externalWholeUsdc;
 
     function run() external {
         string memory path = string.concat("../../deployments/", vm.toString(block.chainid), ".json");
@@ -57,6 +64,12 @@ contract DeployGrow is Script {
         address routeSigner = vm.envOr("ROUTE_SIGNER", msg.sender);
         address feeRecipient = vm.envOr("FEE_RECIPIENT", msg.sender);
 
+        poolMarkWholeUsdc = MockReferenceOracle(
+            vm.parseJsonAddress(deployment, ".contracts.MockReferenceOracle")
+        ).latestPrice().midPriceE18 / 1e18;
+        externalWholeUsdc = DemoPrice.growVenueWhole(poolMarkWholeUsdc);
+        require(externalWholeUsdc > 0, "grow: venue mark rounded to zero");
+
         vm.startBroadcast();
 
         VortexCompounder compounder = new VortexCompounder(IAqua(address(aqua)), permRouter);
@@ -64,15 +77,15 @@ contract DeployGrow is Script {
         MockExternalRouter externalRouter = new MockExternalRouter();
         // Rates are token-unit ratios: WBTC has 8 decimals, USDC 6.
         externalRouter.setRate(
-            address(usdc), address(wbtc), (1e8 * 1e18) / (EXTERNAL_WBTC_PRICE_WHOLE_USDC * 1e6)
+            address(usdc), address(wbtc), (1e8 * 1e18) / (externalWholeUsdc * 1e6)
         );
         externalRouter.setRate(
-            address(wbtc), address(usdc), (EXTERNAL_WBTC_PRICE_WHOLE_USDC * 1e6 * 1e18) / 1e8
+            address(wbtc), address(usdc), (externalWholeUsdc * 1e6 * 1e18) / 1e8
         );
 
         // A labelled stale venue for the demo narrative — deliberately off-mark.
         MockStalePool stalePool =
-            new MockStalePool(address(wbtc), address(usdc), EXTERNAL_WBTC_PRICE_WHOLE_USDC * 1e18);
+            new MockStalePool(address(wbtc), address(usdc), externalWholeUsdc * 1e18);
 
         // Fund the maker for THIS position specifically. Aqua books virtual
         // balances without moving tokens, so shipping more than the maker holds
@@ -220,8 +233,8 @@ contract DeployGrow is Script {
         vm.serializeUint(root, "shippedAsset", SHIPPED_WBTC);
         // Documented so the UI can label the venue honestly (MASTER §21).
         vm.serializeString(root, "externalVenueKind", "SIMULATED");
-        vm.serializeUint(root, "externalVenuePriceWholeUsdc", EXTERNAL_WBTC_PRICE_WHOLE_USDC);
-        vm.serializeUint(root, "poolMarkWholeUsdc", POOL_MARK_WHOLE_USDC);
+        vm.serializeUint(root, "externalVenuePriceWholeUsdc", externalWholeUsdc);
+        vm.serializeUint(root, "poolMarkWholeUsdc", poolMarkWholeUsdc);
         string memory json = vm.serializeString(root, "strategy", strategyJson);
 
         if (vm.isContext(VmSafe.ForgeContext.ScriptBroadcast)) {

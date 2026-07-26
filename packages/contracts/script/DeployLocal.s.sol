@@ -13,6 +13,8 @@ import { VortexAquaOrderBuilder } from "../src/aqua/VortexAquaOrderBuilder.sol";
 import { VortexAquaPricing } from "../src/aqua/VortexAquaPricing.sol";
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
+
+import { DemoPrice } from "./DemoPrice.sol";
 import { MockUSDC } from "../src/mocks/MockUSDC.sol";
 import { MockWBTC } from "../src/mocks/MockWBTC.sol";
 
@@ -44,7 +46,7 @@ contract DeployLocal is Script {
 
         // Vortex Swap stack (Phase 2).
         MockReferenceOracle oracle = new MockReferenceOracle(msg.sender);
-        oracle.setPrice(100_000e18, 99_950e18, 100_050e18);
+        oracle.setPrice(DemoPrice.midE18(), DemoPrice.bidE18(), DemoPrice.askE18());
         VortexAquaPricing pricing = new VortexAquaPricing(address(router), IAqua(address(aqua)));
         VortexAquaOrderBuilder orderBuilder = new VortexAquaOrderBuilder(pricing);
         VortexAquaLens lens = new VortexAquaLens(IAqua(address(aqua)), address(router), pricing);

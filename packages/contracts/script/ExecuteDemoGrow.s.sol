@@ -97,7 +97,15 @@ contract ExecuteDemoGrow is Script {
         private
     {
         uint128 principal = uint128(vm.envOr("PRINCIPAL", uint256(1e8)));
-        uint128 bridgeAmount = uint128(vm.envOr("BRIDGE_AMOUNT", uint256(90_000e6)));
+        // Sized from the pool's own mark, not a fixed number of USDC. The cycle
+        // sells WBTC on the pool for exactly `bridgeAmount`, so a bridge fixed
+        // at 90k USDC quietly became 1.39 WBTC of principal when the mark moved
+        // off 100,000 — over both `maxAssetSpent` and the position itself, so
+        // the leg reverted on an allowance rather than saying it was mis-sized.
+        // 90% of the principal's value keeps the cycle's shape at any mark.
+        uint256 poolMarkWhole = vm.parseJsonUint(grow, ".poolMarkWholeUsdc");
+        uint128 defaultBridge = uint128((uint256(principal) * poolMarkWhole * 1e6 * 90) / (1e8 * 100));
+        uint128 bridgeAmount = uint128(vm.envOr("BRIDGE_AMOUNT", uint256(defaultBridge)));
         uint64 nonce = uint64(vm.envOr("ROUTE_NONCE", uint256(block.timestamp)));
 
         PoolKey memory poolKey = _poolKey(deployment);
@@ -120,7 +128,9 @@ contract ExecuteDemoGrow is Script {
             direction: uint8(VortexGrowDirection.VORTEX_THEN_EXTERNAL),
             principalAmount: principal,
             bridgeAmount: bridgeAmount,
-            maxAssetSpent: uint128(vm.envOr("MAX_ASSET_SPENT", uint256(0.95e8))),
+            // A fraction of the principal, so it scales with the position
+            // rather than pinning a WBTC amount that only fits one mark.
+            maxAssetSpent: uint128(vm.envOr("MAX_ASSET_SPENT", (uint256(principal) * 95) / 100)),
             minFinalAsset: 0, // the strategy's own minProfitBps still binds
             externalTarget: vm.parseJsonAddress(grow, ".externalTarget"),
             externalValue: 0,

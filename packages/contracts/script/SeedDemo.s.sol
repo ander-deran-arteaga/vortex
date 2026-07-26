@@ -14,6 +14,8 @@ import { VortexAquaOrderBuilder } from "../src/aqua/VortexAquaOrderBuilder.sol";
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 
+import { DemoPrice } from "./DemoPrice.sol";
+
 /// @notice Ships a deterministic Vortex Swap strategy on the local chain so
 ///         the api/web demos have live Aqua liquidity to quote against.
 ///         Deterministic by construction: the strategy deadline is an absolute
@@ -29,7 +31,10 @@ contract SeedDemo is Script {
     uint40 internal constant DEMO_STRATEGY_DEADLINE = 2_000_000_000;
 
     uint256 internal constant DEMO_WBTC = 2e8; // 2 WBTC
-    uint256 internal constant DEMO_USDC = 200_000e6; // 200k USDC (balanced at 100k/WBTC)
+    /// @dev Balanced against DEMO_WBTC at the demo mark, so the maker opens on
+    ///      an even book. Derived, because a token-balanced but value-skewed
+    ///      book quotes badly and loses the comparison for the wrong reason.
+    uint256 internal immutable DEMO_USDC = DemoPrice.balancedUsdcUnits(DEMO_WBTC);
     uint256 internal constant VERIFY_QUOTE_AMOUNT = 0.05e8; // 0.05 WBTC reference fill
 
     function run() external {

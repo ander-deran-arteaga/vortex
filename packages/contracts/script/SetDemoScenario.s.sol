@@ -6,6 +6,8 @@ import { console } from "forge-std/console.sol";
 
 import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 
+import { DemoPrice } from "./DemoPrice.sol";
+
 /// @notice Moves the reference oracle so the venue comparison flips on demand,
 ///         for the judge demo.
 ///
@@ -33,15 +35,6 @@ import { MockReferenceOracle } from "../src/mocks/MockReferenceOracle.sol";
 ///        `maxPoolDeviationBps`, so the PermAMM pool and Vortex Grow keep
 ///        working at the same time.
 contract SetDemoScenario is Script {
-    /// @dev Competitive: the maker marks WBTC where the market is.
-    uint256 internal constant AQUA_WINS_MID = 100_000e18;
-    /// @dev Uncompetitive: the maker marks WBTC 3% low, so it really is the
-    ///      worse venue and a correct router must route away from us.
-    uint256 internal constant UNISWAP_WINS_MID = 97_000e18;
-
-    /// @dev 10 bps total, symmetric around the mid.
-    uint256 internal constant HALF_SPREAD_BPS = 5;
-
     function run() external {
         string memory path = string.concat(
             "../../deployments/",
@@ -64,8 +57,8 @@ contract SetDemoScenario is Script {
             (mid, bid, ask) = (p.midPriceE18, p.bidPriceE18, p.askPriceE18);
         } else {
             mid = _midFor(scenario);
-            bid = mid - (mid * HALF_SPREAD_BPS) / 10_000;
-            ask = mid + (mid * HALF_SPREAD_BPS) / 10_000;
+            bid = mid - (mid * DemoPrice.HALF_SPREAD_BPS) / 10_000;
+            ask = mid + (mid * DemoPrice.HALF_SPREAD_BPS) / 10_000;
         }
 
         vm.startBroadcast();
@@ -83,7 +76,7 @@ contract SetDemoScenario is Script {
         // price by more than the remaining headroom, Grow reverts in
         // beforeSwap. Measured, not assumed: Grow completes under this scenario
         // on a freshly bootstrapped chain.
-        if (mid != AQUA_WINS_MID) {
+        if (mid != DemoPrice.midE18()) {
             console.log("");
             console.log("WARNING: this scenario uses ~300 bps of the PermAMM hook's 500 bps");
             console.log("  pool-vs-oracle deviation budget, leaving ~200 bps.");
@@ -97,8 +90,8 @@ contract SetDemoScenario is Script {
 
     function _midFor(string memory scenario) internal pure returns (uint256) {
         bytes32 key = keccak256(bytes(scenario));
-        if (key == keccak256("AQUA_WINS")) return AQUA_WINS_MID;
-        if (key == keccak256("UNISWAP_WINS")) return UNISWAP_WINS_MID;
+        if (key == keccak256("AQUA_WINS")) return DemoPrice.midE18();
+        if (key == keccak256("UNISWAP_WINS")) return DemoPrice.uniswapWinsMidE18();
         revert("SCENARIO must be AQUA_WINS or UNISWAP_WINS");
     }
 }

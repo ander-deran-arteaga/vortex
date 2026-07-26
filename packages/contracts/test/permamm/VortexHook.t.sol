@@ -24,6 +24,8 @@ import { VortexLiquidityManager } from "../../src/permamm/VortexLiquidityManager
 import { VortexQuoter } from "../../src/permamm/VortexQuoter.sol";
 import { VortexRouter } from "../../src/permamm/VortexRouter.sol";
 
+import { DemoPrice } from "../../script/DemoPrice.sol";
+
 /// @notice Phase 5 exit gate: a REAL Uniswap v4 pool with a REAL hook, where a
 ///         valid signed authorization changes the actual swap fee and invalid
 ///         ones revert.
@@ -451,10 +453,12 @@ contract VortexHookTest is Test {
     ///      deviation cap. If either number changes, this fails rather than the
     ///      demo failing live.
     function test_demoScenarioOracleMoveIsWithinTolerance() public {
-        uint256 scenarioMid = 97_000e18; // SetDemoScenario UNISWAP_WINS
+        // Derived from the scenario's own constant, not restated: if the demo
+        // move changes, this test moves with it instead of silently passing.
+        uint256 scenarioMid = MID - (MID * DemoPrice.SCENARIO_MOVE_BPS) / 10_000;
         oracle.setPrice(scenarioMid, scenarioMid * 9_995 / 10_000, scenarioMid * 10_005 / 10_000);
 
-        // The pool is still initialised at 100k; a 3% gap must remain tradeable.
+        // The pool is still at its initial mark; that gap must stay tradeable.
         uint128 amountIn = wbtcIsCurrency0 ? 0.01e8 : 1_000e6;
         uint256 amountOut = _swapExactIn(amountIn, true, 1_000);
         assertGt(amountOut, 0, "3% oracle move must not stop PermAMM swaps");

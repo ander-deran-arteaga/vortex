@@ -8,6 +8,8 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { IAqua } from "@1inch/aqua/src/interfaces/IAqua.sol";
 
+import { DemoPrice } from "./DemoPrice.sol";
+
 import { IVortexReferenceOracle } from "../src/interfaces/IVortexReferenceOracle.sol";
 import { MockERC20 } from "../src/mocks/MockERC20.sol";
 
@@ -38,7 +40,6 @@ interface IExtsload {
 
 contract CheckDemoReady is Script {
     uint256 internal constant MAX_ORACLE_AGE = 1 hours;
-    uint256 internal constant COMPETITIVE_MID_E18 = 100_000e18;
     /// @dev Aqua marks a docked strategy with this token count.
     uint8 internal constant DOCKED = 0xff;
     /// @dev v4-core PoolManager's `POOLS_SLOT`. A wrong value yields a nonsense
@@ -136,7 +137,7 @@ contract CheckDemoReady is Script {
             console.log("  ok    oracle fresh (%s s old)", age);
         }
 
-        if (p.midPriceE18 != COMPETITIVE_MID_E18) {
+        if (p.midPriceE18 != DemoPrice.midE18()) {
             console.log("  WARN  maker is NOT on the competitive baseline (mid %s e18)", p.midPriceE18 / 1e18);
             console.log("        the headline best-execution scene will show Aqua losing, and");
             console.log("        ~300 of the hook's 500 bps deviation budget is spent, so Grow");
@@ -144,7 +145,7 @@ contract CheckDemoReady is Script {
             console.log("        fix: SCENARIO=AQUA_WINS forge script script/SetDemoScenario.s.sol --broadcast ...");
             failures++;
         } else {
-            console.log("  ok    maker on the competitive baseline (mid 100000)");
+            console.log("  ok    maker on the competitive baseline (mid %s)", DemoPrice.WBTC_USD_WHOLE);
         }
     }
 

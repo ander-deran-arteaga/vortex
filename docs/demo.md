@@ -288,8 +288,9 @@ deployer's live nonce, so a committed copy would go stale and silently point at
 the wrong contracts. Expect them to be absent on a fresh clone; run the steps.
 
 **⚠️ Set the oracle to the real market price first.** The deploy script marks
-WBTC at 100,000 USDC. Real WBTC is far from that, so Aqua would "win" purely
-by mispricing — which is not best execution, it is a broken oracle. Read the
+WBTC at the `DemoPrice.WBTC_USD_WHOLE` mark, which is pinned to roughly the
+real BTC price but not to the minute. Left unadjusted against live tokens, Aqua
+could "win" purely by mispricing — which is not best execution, it is a broken oracle. Read the
 live Uniswap quote, then set the oracle to that price:
 
 ```bash
@@ -348,13 +349,13 @@ Nothing else on the chain changes, so this is invisible unless measured. The
 pre-flight measures it and warns with a couple of cycles still in hand:
 
 ```
-WARN  Grow's edge is nearly spent: pool 95721 vs venue 95000 (75 bps)
+WARN  Grow's edge is nearly spent: pool 61900 vs venue 61560 (55 bps)
       fix: FRESH=1 ./scripts/verify-demo.sh rebuilds the chain and the edge
 ```
 
 **Practical rule: don't rehearse Grow more than a few times before a judged
 run, and rebuild with `FRESH=1` if you have.** A rebuild restores the pool to
-its 100,000 mark and the full 526 bps.
+its deploy mark and the full 526 bps.
 
 ---
 

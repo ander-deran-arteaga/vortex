@@ -120,9 +120,10 @@ The **delta** is the invariant and the script asserts it: real and virtual
 growth must agree exactly, and the bridge asset must end at zero. Absolute
 balances shift if a Swap ran first, since that moves WBTC to the same maker.
 
-> The external venue is **simulated** (`MockExternalRouter`, marking WBTC at
-> 95k against the pool's 100k). The compounding mechanism, the atomicity and
-> the profit floor are real; the arbitrage opportunity is manufactured. Say
+> The external venue is **simulated** (`MockExternalRouter`, marking WBTC ~5%
+> under the PermAMM pool — both derived from `script/DemoPrice.sol`, so the
+> ratio holds at any mark). The compounding mechanism, the atomicity and the
+> profit floor are real; the arbitrage opportunity is manufactured. Say
 > "simulated counterparty" whenever this number is shown.
 
 ## 3. Make the router choose against our own venue
