@@ -264,3 +264,113 @@ describe("token symbols are derived, never assumed from position", () => {
     expect(body.tokens[1]!.address.toLowerCase()).toBe(WETH.toLowerCase());
   });
 });
+
+/**
+ * MASTER Addendum 24: Vortex Grow is a SINGLE-ASSET strategy. Querying it as
+ * a token pair made Aqua revert, which the API reported as STRATEGY_NOT_FOUND
+ * for a strategy that was shipped and compounding — and then advised a
+ * redeploy, which the bring-up script correctly refused to do. A loop with no
+ * exit over a healthy chain.
+ */
+describe("single-asset Grow strategy health", () => {
+  const GROW_HASH = `0x${"cf".repeat(32)}` as `0x${string}`;
+  const ASSET = WBTC as `0x${string}`;
+  const MAKER = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8" as `0x${string}`;
+  const COMPOUNDER = "0x4ed7c70F96B99c776995fB64377f0d4aB3B0e1C1" as `0x${string}`;
+
+  const growContext = (virtual: bigint, executable = virtual) =>
+    ({
+      deployment: {
+        strategyHash: GROW_HASH,
+        compounder: COMPOUNDER,
+        strategy: { maker: MAKER, asset: ASSET },
+      },
+      client: {
+        readContract: async ({ functionName }: { functionName: string }) => {
+          if (functionName === "rawBalances") return virtual;
+          if (functionName === "safeBalances") return [executable, executable];
+          if (functionName === "balanceOf") return virtual + 1_000_000n;
+          if (functionName === "allowance") return 2n ** 256n - 1n;
+          throw new Error(`unexpected ${functionName}`);
+        },
+      },
+    }) as never;
+
+  // 31337, because the Grow branch needs an `Aqua` address in the deployment;
+  // 42161 ships an empty contract set.
+  const serveGrow = (grow: unknown) =>
+    buildServer(
+      { CHAIN_ID: "31337" },
+      { envSource: {}, uniswapClient: null, grow: grow as never },
+    );
+
+  it("returns healthy coverage for a shipped single-asset strategy", async () => {
+    built = serveGrow(growContext(508_811_174n));
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${GROW_HASH}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = zStrategyHealth.parse(res.json());
+    expect(body.active).toBe(true);
+    expect(body.solvent).toBe(true);
+    expect(body.coverageBps).toBe(10_000);
+    // Exactly ONE token — the strategy's real asset set, not a pair.
+    expect(body.tokens).toHaveLength(1);
+    expect(body.tokens[0]!.virtualBalance).toBe("508811174");
+  });
+
+  it("still reports a genuinely unshipped strategy as not found", async () => {
+    // Zero virtual balance is the one honest "absent".
+    built = serveGrow(growContext(0n));
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${GROW_HASH}`,
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(zApiError.parse(res.json()).error.code).toBe("STRATEGY_NOT_FOUND");
+  });
+
+  it("never advises a redeploy — that guidance is a loop with no exit", async () => {
+    built = serveGrow(growContext(0n));
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${GROW_HASH}`,
+    });
+
+    const message = zApiError.parse(res.json()).error.message;
+    expect(message).not.toContain("ensure-demo");
+    expect(message).not.toContain("re-run");
+  });
+
+  it("reports an asset mismatch as its own fact, not as not-found", async () => {
+    const reverting = {
+      deployment: {
+        strategyHash: GROW_HASH,
+        compounder: COMPOUNDER,
+        strategy: { maker: MAKER, asset: ASSET },
+      },
+      client: {
+        readContract: async () => {
+          throw new Error(
+            "execution reverted: custom error 0xb63386a6 SafeBalancesForTokenNotInActiveStrategy",
+          );
+        },
+      },
+    };
+    built = serveGrow(reverting);
+
+    const res = await built.app.inject({
+      method: "GET",
+      url: `${API_ROUTES.strategies}/${GROW_HASH}`,
+    });
+
+    // "active but holds a different token" is NOT "absent".
+    expect(res.statusCode).toBe(409);
+    expect(zApiError.parse(res.json()).error.code).toBe(
+      "STRATEGY_ASSET_MISMATCH",
+    );
+  });
+});

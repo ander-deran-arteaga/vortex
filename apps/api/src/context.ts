@@ -75,6 +75,8 @@ export interface AppContext {
   startedAt: number;
   /** The pair as deployed on this chain — mocks locally, canonical on 42161. */
   tokens: ChainToken[];
+  /** Address -> symbol for THIS chain; never guesses from position. */
+  resolveSymbol: (address: string) => string;
   aquaExecution: AquaExecutionContext | null;
   grow: GrowContext | null;
   exchange: ExchangeQuoteDeps & {
@@ -184,6 +186,7 @@ export function buildContext(
     deployment,
     startedAt: Date.now(),
     tokens,
+    resolveSymbol,
     aquaExecution,
     grow: deps.grow !== undefined ? deps.grow : grow,
     exchange: {
