@@ -24,7 +24,11 @@ export function registerQuoteRoutes(
       return reply.status(400).send({
         error: {
           code: "CHAIN_MISMATCH",
-          message: `server is configured for chain ${ctx.env.CHAIN_ID}`,
+          message:
+            `this server quotes chain ${ctx.env.CHAIN_ID}, not ${body.chainId}. ` +
+            `Take the chain from GET /api/v1/config — it is authoritative for ` +
+            `quoting — rather than from the wallet. To move the server instead, ` +
+            `restart it with CHAIN_ID=${body.chainId}.`,
         },
       });
     }

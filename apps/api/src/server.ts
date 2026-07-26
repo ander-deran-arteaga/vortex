@@ -15,10 +15,13 @@ import { registerExecutionRoutes } from "./routes/executions";
 import { registerGrowRoutes } from "./routes/grow";
 import { registerHealthRoutes } from "./routes/health";
 import { loadAquaDemoStrategy } from "./config/aquaDeployment";
+import { loadGrowDeployment } from "./config/growDeployment";
 import {
   diagnoseChainConfiguration,
   formatPreflight,
+  probeHasCode,
   probeRpcChainId,
+  probeStrategyShipped,
   type PreflightFinding,
 } from "./config/preflight";
 import { rpcUrlForChain } from "./clients/rpcClient";
@@ -127,12 +130,67 @@ export async function runChainPreflight(
     (id) => loadAquaDemoStrategy(id, undefined, ctx.env.DEPLOYMENT_VARIANT) !== null,
   );
 
+  const contractsMissing: string[] = [];
+  const strategiesUnshipped: string[] = [];
+
+  // Only probe when the chain is actually the one we think it is; otherwise
+  // every address would read as missing and bury the real (chain id) problem.
+  if (rpcChainId === ctx.env.CHAIN_ID) {
+    const aqua = ctx.deployment.contracts.Aqua;
+    const required: Array<[string, string | undefined]> = [
+      ["Aqua", aqua],
+      ["AquaSwapVMRouter", ctx.deployment.contracts.AquaSwapVMRouter],
+      ["VortexAquaLens", ctx.deployment.contracts.VortexAquaLens],
+    ];
+    for (const [name, address] of required) {
+      if (!address || !(await probeHasCode(rpcUrl, address))) {
+        contractsMissing.push(name);
+      }
+    }
+
+    // A strategy is Aqua state, not a contract: the addresses can all hold
+    // bytecode while nothing was ever shipped.
+    if (contractsMissing.length === 0 && aqua) {
+      const swap = ctx.aquaExecution;
+      if (swap) {
+        const shipped = await probeStrategyShipped(
+          rpcUrl,
+          aqua,
+          swap.strategy.maker,
+          swap.routerAddress,
+          swap.strategy.strategyHash,
+          swap.strategy.baseToken,
+        );
+        if (shipped === false) strategiesUnshipped.push("Vortex Swap");
+      }
+
+      const grow = loadGrowDeployment(
+        ctx.env.CHAIN_ID,
+        ctx.deployment.contracts,
+        (ctx.deployment as { permAmmPoolId?: `0x${string}` }).permAmmPoolId,
+      );
+      if (grow) {
+        const shipped = await probeStrategyShipped(
+          rpcUrl,
+          aqua,
+          grow.strategy.maker,
+          grow.compounder,
+          grow.strategyHash,
+          grow.strategy.asset,
+        );
+        if (shipped === false) strategiesUnshipped.push("Vortex Grow");
+      }
+    }
+  }
+
   return diagnoseChainConfiguration({
     configuredChainId: ctx.env.CHAIN_ID,
     rpcUrl,
     rpcChainId,
     hasAquaStrategy: ctx.aquaExecution !== null,
     chainsWithStrategies,
+    contractsMissing,
+    strategiesUnshipped,
   });
 }
 

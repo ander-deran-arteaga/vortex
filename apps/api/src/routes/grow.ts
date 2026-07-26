@@ -34,7 +34,11 @@ export function registerGrowRoutes(
       return reply.status(400).send({
         error: {
           code: "CHAIN_MISMATCH",
-          message: `server is configured for chain ${ctx.env.CHAIN_ID}`,
+          message:
+            `this server scans chain ${ctx.env.CHAIN_ID}, not ${body.chainId}. ` +
+            `Take the chain from GET /api/v1/config — it is authoritative — ` +
+            `rather than from the wallet. To move the server instead, restart ` +
+            `it with CHAIN_ID=${body.chainId}.`,
         },
       });
     }
@@ -45,7 +49,10 @@ export function registerGrowRoutes(
       return reply.status(404).send({
         error: {
           code: "STRATEGY_NOT_FOUND",
-          message: `no Grow strategy ${body.strategyHash} on chain ${ctx.env.CHAIN_ID}`,
+          message:
+            `no Grow strategy ${body.strategyHash} on chain ${ctx.env.CHAIN_ID}. ` +
+            `If the contracts are deployed, the strategy was never shipped into ` +
+            `Aqua — run ./scripts/ensure-demo.sh, which is safe to re-run.`,
         },
       });
     }

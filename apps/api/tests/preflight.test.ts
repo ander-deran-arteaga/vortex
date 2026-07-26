@@ -61,7 +61,7 @@ describe("diagnoseChainConfiguration", () => {
     });
 
     expect(finding.code).toBe("NO_AQUA_STRATEGY");
-    expect(finding.remedy).toContain("bootstrap-fork.sh");
+    expect(finding.remedy).toContain("ensure-demo.sh");
   });
 
   it("warns rather than errors when the RPC is simply not running", () => {
@@ -97,6 +97,69 @@ describe("diagnoseChainConfiguration", () => {
       expect(finding.severity).not.toBe("ok");
       expect(finding.remedy).toBeTruthy();
     }
+  });
+});
+
+describe("diagnoseChainConfiguration — deployed vs shipped", () => {
+  it("distinguishes missing contracts from unshipped strategies", () => {
+    const missing = diagnoseChainConfiguration({
+      ...base,
+      contractsMissing: ["Aqua", "VortexAquaLens"],
+    });
+
+    expect(missing.code).toBe("CONTRACTS_MISSING");
+    expect(missing.message).toContain("Aqua");
+    expect(missing.remedy).toContain("ensure-demo.sh");
+  });
+
+  it("names the unshipped strategies and says the system only LOOKS deployed", () => {
+    // The dangerous state: every address has bytecode, nothing was shipped.
+    const finding = diagnoseChainConfiguration({
+      ...base,
+      strategiesUnshipped: ["Vortex Grow"],
+    });
+
+    expect(finding.severity).toBe("error");
+    expect(finding.code).toBe("STRATEGIES_UNSHIPPED");
+    expect(finding.message).toContain("Vortex Grow");
+    expect(finding.message).toContain("looks deployed");
+    // It must name the symptom an operator would otherwise chase.
+    expect(finding.message).toContain("STRATEGY_NOT_FOUND");
+    expect(finding.remedy).toContain("ensure-demo.sh");
+  });
+
+  it("reports missing contracts before unshipped strategies", () => {
+    // Nothing can be shipped into a contract that does not exist, so the
+    // deeper cause wins.
+    const finding = diagnoseChainConfiguration({
+      ...base,
+      contractsMissing: ["Aqua"],
+      strategiesUnshipped: ["Vortex Swap"],
+    });
+
+    expect(finding.code).toBe("CONTRACTS_MISSING");
+  });
+
+  it("reports a chain mismatch before either — it explains both", () => {
+    const finding = diagnoseChainConfiguration({
+      ...base,
+      configuredChainId: 42161,
+      rpcChainId: 31337,
+      contractsMissing: ["Aqua"],
+      strategiesUnshipped: ["Vortex Swap"],
+    });
+
+    expect(finding.code).toBe("CHAIN_ID_MISMATCH");
+  });
+
+  it("passes when contracts are present and strategies are shipped", () => {
+    expect(
+      diagnoseChainConfiguration({
+        ...base,
+        contractsMissing: [],
+        strategiesUnshipped: [],
+      }).severity,
+    ).toBe("ok");
   });
 });
 

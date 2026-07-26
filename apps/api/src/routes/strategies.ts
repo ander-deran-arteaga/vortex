@@ -26,7 +26,11 @@ export function registerStrategyRoutes(
       return reply.status(404).send({
         error: {
           code: "STRATEGY_NOT_FOUND",
-          message: `no strategy ${params.strategyHash} on chain ${ctx.env.CHAIN_ID}`,
+          message:
+            `no strategy ${params.strategyHash} on chain ${ctx.env.CHAIN_ID}. ` +
+            `This is an unshipped strategy, not unreadable coverage: the ` +
+            `contracts can all be deployed while nothing was shipped into ` +
+            `Aqua. Run ./scripts/ensure-demo.sh — it is safe to re-run.`,
         },
       });
     }
