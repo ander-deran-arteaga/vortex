@@ -155,3 +155,33 @@
     letter-spacing: -0.01em;
   }
 }
+
+@layer base {
+  /*
+    Reduced motion is honoured globally, not per component.
+
+    Every transition and animation in the app is decorative: a colour warming
+    on hover, the nav mark turning, the Grow flow advancing. None of it carries
+    meaning that the static frame does not, so for a reader who asks for less
+    motion we remove it outright rather than merely shortening it. Content is
+    never revealed by an animation here, so nothing disappears when motion is
+    switched off.
+
+    `scroll-behavior: auto` matters too: the landing header links jump to
+    section anchors, and a smooth scroll is motion the reader declined.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
