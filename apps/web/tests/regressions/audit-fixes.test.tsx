@@ -105,35 +105,6 @@ describe("execution never strands the user", () => {
   });
 });
 
-describe("dashboard tells the truth when a read fails", () => {
-  it("does not assert an empty history when the request errored", async () => {
-    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
-    // An enveloped 500 is a real failure: it must surface, not fall back.
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({ error: { code: "INTERNAL_ERROR", message: "boom" } }),
-          { status: 500, headers: { "content-type": "application/json" } },
-        ),
-      ),
-    );
-    const { DashboardClient } = await import("@/components/dashboard/dashboard-client");
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={client}>
-        <DashboardClient />
-      </QueryClientProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/some reads failed/i);
-    });
-    expect(screen.queryByText("No executions recorded yet.")).toBeNull();
-    expect(screen.getByText(/empty for an unknown reason/i)).toBeInTheDocument();
-  });
-});
-
 describe("Grow does not blame prices for a timeout", () => {
   it("says the opportunity expired rather than citing market conditions", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

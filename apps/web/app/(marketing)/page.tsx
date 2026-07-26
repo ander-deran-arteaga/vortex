@@ -249,14 +249,6 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <p className="mt-6 text-sm text-say-3">
-          <Link
-            href="/architecture"
-            className="text-say-2 transition-colors duration-150 hover:text-cu"
-          >
-            Read the architecture
-          </Link>
-        </p>
       </Section>
 
       {/* ───────────────────────── 5 · what the chain enforces ────────────── */}
